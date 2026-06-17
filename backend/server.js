@@ -17,6 +17,16 @@ const app = express();
 
 const registrosPendientes = new Map();
 
+const transporter = nodemailer.createTransport({
+    host: "smtp.gmail.com",
+    port: 465,
+    secure: true,
+    auth: {
+        user: process.env.EMAIL_USER,
+        pass: process.env.EMAIL_PASS
+    }
+});
+
 function validarFormatoCorreo(correo) {
     const expresion = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     return expresion.test(correo);
@@ -32,6 +42,39 @@ function validarPasswordSegura(password) {
 
 function generarCodigoVerificacion() {
     return Math.floor(100000 + Math.random() * 900000).toString();
+}
+
+async function enviarCorreoVerificacion(correo, nombre, codigo) {
+    await transporter.sendMail({
+        from: process.env.EMAIL_FROM,
+        to: correo,
+        subject: "Código de verificación - StarView",
+        html: `
+            <div style="font-family: Arial, sans-serif; background:#080b14; padding:30px; color:#ffffff;">
+                <div style="max-width:560px; margin:auto; background:#111827; border-radius:20px; padding:30px; border:1px solid rgba(255,255,255,.12);">
+                    <h1 style="color:#ff3045; margin-top:0; letter-spacing:2px;">STARVIEW</h1>
+
+                    <h2 style="margin-bottom:10px;">Verifica tu cuenta</h2>
+
+                    <p>Hola <strong>${nombre}</strong>,</p>
+
+                    <p>
+                        Gracias por registrarte en StarView. Usa el siguiente código para verificar tu cuenta:
+                    </p>
+
+                    <div style="font-size:34px; font-weight:bold; letter-spacing:8px; background:#0b1020; border-radius:14px; padding:18px; text-align:center; color:#86efac; margin:24px 0;">
+                        ${codigo}
+                    </div>
+
+                    <p>Este código vence en 10 minutos.</p>
+
+                    <p style="color:#9ca3af; font-size:13px;">
+                        Si tú no solicitaste este registro, puedes ignorar este correo.
+                    </p>
+                </div>
+            </div>
+        `
+    });
 }
 
 app.use(cors());
@@ -76,7 +119,8 @@ app.post("/registro", async (req, res) => {
             [correo],
             async (error, resultados) => {
                 if (error) {
-                    console.log(error);
+                    console.log("Error al verificar correo:", error);
+
                     return res.json({
                         ok: false,
                         mensaje: "Error al verificar el correo"
@@ -101,15 +145,28 @@ app.post("/registro", async (req, res) => {
                     creado: Date.now()
                 });
 
-                res.json({
-                    ok: true,
-                    mensaje: "Código de verificación enviado al correo",
-                    codigo_verificacion: codigo
-                });
+                try {
+                    await enviarCorreoVerificacion(correo, nombre, codigo);
+
+                    res.json({
+                        ok: true,
+                        mensaje: "Código de verificación enviado a tu correo"
+                    });
+                } catch (errorCorreo) {
+                    console.log("Error al enviar correo de verificación:", errorCorreo);
+
+                    registrosPendientes.delete(correo);
+
+                    res.json({
+                        ok: false,
+                        mensaje: "No se pudo enviar el correo de verificación. Revisa la configuración del correo remitente."
+                    });
+                }
             }
         );
     } catch (error) {
-        console.log(error);
+        console.log("Error interno en registro:", error);
+
         res.json({
             ok: false,
             mensaje: "Error interno del servidor"
