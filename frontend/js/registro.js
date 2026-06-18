@@ -88,6 +88,20 @@ function actualizarReglasPassword() {
     const password = document.getElementById("password").value;
     const reglas = validarPassword(password);
 
+  function visualizarPasswordRegistro() {
+    const passwordInput = document.getElementById("password");
+    const boton = document.querySelector(".toggle-password-btn");
+
+    if (!passwordInput || !boton) return;
+
+    if (passwordInput.type === "password") {
+        passwordInput.type = "text";
+        boton.innerText = "Ocultar";
+    } else {
+        passwordInput.type = "password";
+        boton.innerText = "Ver";
+    }
+}
     const ruleLength = document.getElementById("ruleLength");
     const ruleNumber = document.getElementById("ruleNumber");
     const ruleSymbol = document.getElementById("ruleSymbol");
@@ -215,12 +229,17 @@ async function verificarCodigoRegistro() {
             return;
         }
 
-        mostrarMensajeVerificacion("Registro exitoso. Redirigiendo...", "ok");
+            localStorage.setItem("usuario_id", datos.usuario.id);
+            localStorage.setItem("nombre_usuario", datos.usuario.nombre);
+            localStorage.removeItem("perfil_id");
+            localStorage.removeItem("perfil_nombre");
 
-        setTimeout(() => {
-            cerrarModalVerificacion();
-            window.location.replace("login.html");
-        }, 1200);
+            mostrarMensajeVerificacion("Registro exitoso. Ahora elige un plan para continuar.", "ok");
+
+            setTimeout(() => {
+                cerrarModalVerificacion();
+                window.location.replace("planes.html");
+            }, 1200);
 
     } catch (error) {
         console.log(error);

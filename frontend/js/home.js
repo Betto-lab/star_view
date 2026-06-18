@@ -26,22 +26,51 @@ function mostrarToast(texto, tipo = "info") {
 
 function cerrarSesion() {
     localStorage.clear();
+    window.location.href = "index.html";
 }
 
 function obtenerPerfilId() {
     return localStorage.getItem("perfil_id");
 }
 
-function protegerPerfil() {
-    const usuario_id = localStorage.getItem("usuario_id");
-    const perfil_id = obtenerPerfilId();
+async function verificarAccesoCatalogo() {
+    const usuarioId = localStorage.getItem("usuario_id");
 
-    if (!usuario_id) {
+    if (!usuarioId || usuarioId === "undefined" || usuarioId === "null") {
+        localStorage.removeItem("usuario_id");
+        localStorage.setItem("volver_despues_login", "planes.html");
         window.location.href = "login.html";
         return false;
     }
 
-    if (!perfil_id) {
+    try {
+        const respuesta = await fetch(`${API_BASE}/suscripcion/${usuarioId}`);
+        const suscripcion = await respuesta.json();
+
+        if (!suscripcion || !suscripcion.estado || suscripcion.estado !== "activa") {
+            window.location.href = "planes.html";
+            return false;
+        }
+
+        return true;
+    } catch (error) {
+        console.log("Error al verificar suscripción:", error);
+        window.location.href = "planes.html";
+        return false;
+    }
+}
+
+function protegerPerfil() {
+    const usuario_id = localStorage.getItem("usuario_id");
+    const perfil_id = obtenerPerfilId();
+
+    if (!usuario_id || usuario_id === "undefined" || usuario_id === "null") {
+        localStorage.removeItem("usuario_id");
+        window.location.href = "login.html";
+        return false;
+    }
+
+    if (!perfil_id || perfil_id === "undefined" || perfil_id === "null") {
         window.location.href = "seleccionar-perfil.html";
         return false;
     }
@@ -112,14 +141,21 @@ async function cargarCatalogo() {
         catalogo = await respuesta.json();
         mostrarCatalogo(catalogo);
     } catch (error) {
-        document.getElementById("catalogo").innerHTML = `
-            <div class="empty-state">No se pudo cargar el catálogo local.</div>
-        `;
+        const contenedor = document.getElementById("catalogo");
+
+        if (contenedor) {
+            contenedor.innerHTML = `
+                <div class="empty-state">No se pudo cargar el catálogo local.</div>
+            `;
+        }
     }
 }
 
 function mostrarCatalogo(lista) {
     const contenedor = document.getElementById("catalogo");
+
+    if (!contenedor) return;
+
     contenedor.innerHTML = "";
 
     if (!lista || lista.length === 0) {
@@ -131,7 +167,11 @@ function mostrarCatalogo(lista) {
 }
 
 function buscarContenido() {
-    const texto = document.getElementById("buscar").value.toLowerCase().trim();
+    const buscar = document.getElementById("buscar");
+
+    if (!buscar) return;
+
+    const texto = buscar.value.toLowerCase().trim();
 
     const resultados = catalogo.filter(item =>
         String(item.titulo || "").toLowerCase().includes(texto) ||
@@ -156,11 +196,18 @@ async function agregarMiLista(contenido_id) {
             headers: {
                 "Content-Type": "application/json"
             },
-            body: JSON.stringify({ perfil_id, contenido_id })
+            body: JSON.stringify({
+                perfil_id,
+                contenido_id
+            })
         });
 
         const datos = await respuesta.json();
-        mostrarToast(datos.mensaje || "Agregado a Mi Lista", datos.ok ? "ok" : "error");
+
+        mostrarToast(
+            datos.mensaje || "Agregado a Mi Lista",
+            datos.ok ? "ok" : "error"
+        );
     } catch (error) {
         mostrarToast("No se pudo agregar a Mi Lista", "error");
     }
@@ -186,7 +233,7 @@ async function verAhora(id) {
             })
         });
     } catch (error) {
-        console.log("No se pudo registrar historial");
+        console.log("No se pudo registrar historial:", error);
     }
 
     window.location.href = `reproductor.html?id=${id}`;
@@ -195,6 +242,8 @@ async function verAhora(id) {
 async function cargarContinuarViendo() {
     const perfil_id = obtenerPerfilId();
     const contenedor = document.getElementById("continuarViendo");
+
+    if (!contenedor) return;
 
     try {
         const respuesta = await fetch(`${API_BASE}/continuar/${perfil_id}`);
@@ -222,6 +271,8 @@ async function cargarContinuarViendo() {
 async function cargarTMDB() {
     const contenedor = document.getElementById("tmdbCatalogo");
 
+    if (!contenedor) return;
+
     try {
         const respuesta = await fetch(`${API_BASE}/tmdb/populares`);
         const peliculas = await respuesta.json();
@@ -242,26 +293,33 @@ async function cargarTMDB() {
 }
 
 async function importarTMDB(tmdb_id) {
-    const respuesta = await fetch(`${API_BASE}/tmdb/importar`, {
-        method: "POST",
-        headers: {
-            "Content-Type": "application/json"
-        },
-        body: JSON.stringify({ tmdb_id })
-    });
+    try {
+        const respuesta = await fetch(`${API_BASE}/tmdb/importar`, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({ tmdb_id })
+        });
 
-    const contenido = await respuesta.json();
+        const contenido = await respuesta.json();
 
-    if (contenido.error) {
-        alert(contenido.mensaje || "No se pudo importar desde TMDb");
+        if (contenido.error) {
+            mostrarToast(contenido.mensaje || "No se pudo importar desde TMDb", "error");
+            return null;
+        }
+
+        return contenido;
+    } catch (error) {
+        console.log("Error al importar desde TMDb:", error);
+        mostrarToast("No se pudo conectar con TMDb", "error");
         return null;
     }
-
-    return contenido;
 }
 
 async function verAhoraTMDB(tmdb_id) {
     const contenido = await importarTMDB(tmdb_id);
+
     if (!contenido) return;
 
     await verAhora(contenido.id);
@@ -269,13 +327,22 @@ async function verAhoraTMDB(tmdb_id) {
 
 async function agregarMiListaTMDB(tmdb_id) {
     const contenido = await importarTMDB(tmdb_id);
+
     if (!contenido) return;
 
     await agregarMiLista(contenido.id);
 }
 
-function inicializarHome() {
-    if (!protegerPerfil()) return;
+async function inicializarHome() {
+    const accesoPermitido = await verificarAccesoCatalogo();
+
+    if (!accesoPermitido) {
+        return;
+    }
+
+    if (!protegerPerfil()) {
+        return;
+    }
 
     const nombrePerfil = localStorage.getItem("perfil_nombre") || "StarView";
     const perfilActual = document.getElementById("perfilActual");
@@ -289,7 +356,10 @@ function inicializarHome() {
     cargarTMDB();
 
     const buscar = document.getElementById("buscar");
-    buscar.addEventListener("input", buscarContenido);
+
+    if (buscar) {
+        buscar.addEventListener("input", buscarContenido);
+    }
 }
 
 inicializarHome();

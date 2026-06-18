@@ -253,7 +253,7 @@ app.post("/registro/verificar", (req, res) => {
             conexion.query(
                 "INSERT INTO usuarios(nombre, correo, password) VALUES (?, ?, ?)",
                 [registro.nombre, registro.correo, registro.passwordHash],
-                (error) => {
+                (error, resultado) => {
                     if (error) {
                         console.log(error);
                         return res.json({
@@ -266,7 +266,12 @@ app.post("/registro/verificar", (req, res) => {
 
                     res.json({
                         ok: true,
-                        mensaje: "Registro exitoso. Cuenta verificada correctamente"
+                        mensaje: "Registro exitoso. Cuenta verificada correctamente",
+                        usuario: {
+                            id: resultado.insertId,
+                            nombre: registro.nombre,
+                            correo: registro.correo
+                        }
                     });
                 }
             );

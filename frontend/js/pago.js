@@ -242,7 +242,7 @@ async function confirmarPago(event) {
         localStorage.removeItem("plan_precio");
 
         setTimeout(() => {
-            window.location.href = "suscripcion.html";
+            window.location.href = "seleccionar-perfil.html";
         }, 900);
 
     } catch (error) {
