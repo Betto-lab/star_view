@@ -53,6 +53,7 @@ async function cargarContenido() {
         document.getElementById("tipoContenido").innerText = "Tipo: " + (contenido.tipo || "Contenido");
         document.getElementById("generoContenido").innerText = "Género: " + (contenido.genero || "Sin género");
         document.getElementById("descripcionContenido").innerText = contenido.descripcion || "Sin descripción disponible.";
+
     } catch (error) {
         alert("No se pudo cargar el contenido");
         window.location.href = "home.html";
