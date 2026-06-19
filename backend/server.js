@@ -3,10 +3,11 @@ const cors = require("cors");
 const axios = require("axios");
 const bcrypt = require("bcrypt");
 const path = require("path");
-const nodemailer = require("nodemailer");
 
-// CAMBIO AQUÍ: Así funciona tanto en local como en Railway
+const { Resend } = require("resend"); 
+
 require("dotenv").config();
+
 
 
 const conexion = require("./db");
@@ -22,15 +23,7 @@ const app = express();
 
 const registrosPendientes = new Map();
 
-const transporter = nodemailer.createTransport({
-    host: "smtp.gmail.com",
-    port: 587,      // CAMBIO: De 465 a 587 (Puerto amigable para la nube)
-    secure: false,  // CAMBIO: De true a false (Porque 587 usa STARTTLS, no SSL directo)
-    auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS
-    }
-});
+const resend = new Resend(process.env.RESEND_API_KEY);
 
 function validarFormatoCorreo(correo) {
     const expresion = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -55,36 +48,29 @@ function generarCodigoVerificacion() {
 }
 
 async function enviarCorreoVerificacion(correo, nombre, codigo) {
-    await transporter.sendMail({
-        from: process.env.EMAIL_FROM || `StarView <${process.env.EMAIL_USER}>`,
+    const { data, error } = await resend.emails.send({
+        from: "StarView <onboarding@resend.dev>", // Este es el correo de prueba oficial de Resend
         to: correo,
         subject: "Código de verificación - StarView",
         html: `
             <div style="font-family: Arial, sans-serif; background:#080b14; padding:30px; color:#ffffff;">
                 <div style="max-width:560px; margin:auto; background:#111827; border-radius:20px; padding:30px; border:1px solid rgba(255,255,255,.12);">
                     <h1 style="color:#ff3045; margin-top:0; letter-spacing:2px;">STARVIEW</h1>
-
                     <h2 style="margin-bottom:10px;">Verifica tu cuenta</h2>
-
                     <p>Hola <strong>${nombre}</strong>,</p>
-
-                    <p>
-                        Gracias por registrarte en StarView. Usa el siguiente código para verificar tu cuenta:
-                    </p>
-
+                    <p>Gracias por registrarte en StarView. Usa el siguiente código para verificar tu cuenta:</p>
                     <div style="font-size:34px; font-weight:bold; letter-spacing:8px; background:#0b1020; border-radius:14px; padding:18px; text-align:center; color:#86efac; margin:24px 0;">
                         ${codigo}
                     </div>
-
                     <p>Este código vence en 10 minutos.</p>
-
-                    <p style="color:#9ca3af; font-size:13px;">
-                        Si tú no solicitaste este registro, puedes ignorar este correo.
-                    </p>
                 </div>
             </div>
         `
     });
+
+    if (error) {
+        throw new Error(error.message);
+    }
 }
 
 app.use(cors());
