@@ -23,7 +23,6 @@ const app = express();
 
 const registrosPendientes = new Map();
 
-const resend = new Resend(process.env.RESEND_API_KEY);
 
 function validarFormatoCorreo(correo) {
     const expresion = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
