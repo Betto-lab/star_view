@@ -36,15 +36,40 @@
         </div>
     </section>
 
-    <section class="video-shell">
-        <video id="videoPlayer" controls poster="img/backdrop.jpg">
+    <section class="video-shell" id="videoContenedor">
+        <video id="videoPlayer" poster="img/backdrop.jpg">
             <source src="videos/demo.mp4" type="video/mp4">
             Tu navegador no soporta video.
         </video>
 
-        <p class="hint">
-            El progreso se guarda automáticamente para el perfil seleccionado.
-        </p>
+        <div class="controles-personalizados" id="controlesVideo">
+            <div class="controles-progreso">
+                <input type="range" id="barraProgreso" value="0" min="0" step="0.1">
+            </div>
+            
+            <div class="controles-botones">
+                <div class="controles-izquierda">
+                    <button id="btnPlayPause" class="btn-control">▶ Play</button>
+                    <button id="btnRetroceder" class="btn-control">⏪ 10s</button>
+                    <button id="btnAdelantar" class="btn-control">30s ⏩</button>
+                    
+                    <div class="control-volumen">
+                        <span>🔊</span>
+                        <input type="range" id="barraVolumen" min="0" max="1" step="0.1" value="1">
+                    </div>
+                </div>
+                
+                <div class="controles-derecha">
+                    <button id="btnPantallaCompleta" class="btn-control">🔲 Pantalla Completa</button>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="recomendaciones-wrapper" style="margin-top: 40px;">
+        <h3 style="color: white; margin-bottom: 15px;">Porque estás viendo esto, te recomendamos:</h3>
+        <div class="slider-peliculas" id="contenedorRecomendaciones" style="display: flex; gap: 15px; overflow-x: auto; padding-bottom: 15px;">
+            </div>
     </section>
 </main>
 

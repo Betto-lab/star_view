@@ -2048,3 +2048,25 @@ textarea:focus{
         font-size: 12px;
     }
 }
+
+/* ESTILOS PARA EL REPRODUCTOR HU11 */
+.video-shell { position: relative; display: flex; flex-direction: column; }
+.controles-personalizados { background: rgba(0, 0, 0, 0.8); padding: 10px; display: flex; flex-direction: column; gap: 10px; border-radius: 0 0 10px 10px; }
+.controles-botones { display: flex; justify-content: space-between; align-items: center; }
+.controles-izquierda, .controles-derecha { display: flex; gap: 15px; align-items: center; }
+.btn-control { background: none; border: none; color: white; cursor: pointer; font-size: 14px; padding: 5px 10px; }
+.btn-control:hover { color: #e50914; }
+.control-volumen { display: flex; align-items: center; gap: 5px; }
+#barraProgreso { width: 100%; cursor: pointer; }
+/* Efecto de interacción al pasar el mouse */
+.pelicula-card {
+    transition: transform 0.3s ease, box-shadow 0.3s ease, opacity 0.3s ease;
+    cursor: pointer; /* Cambia el cursor a manito para indicar clic */
+}
+
+.pelicula-card:hover {
+    transform: scale(1.05); /* Agranda un 5% */
+    opacity: 0.9;
+    box-shadow: 0 10px 20px rgba(229, 9, 20, 0.3); /* Un brillo rojo sutil */
+    border: 1px solid rgba(229, 9, 20, 0.5); /* Borde luminoso */
+}
