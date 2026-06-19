@@ -4,7 +4,7 @@ const axios = require("axios");
 const bcrypt = require("bcrypt");
 const path = require("path");
 
-const { Resend } = require("resend"); 
+
 
 require("dotenv").config();
 
@@ -48,28 +48,16 @@ function generarCodigoVerificacion() {
 }
 
 async function enviarCorreoVerificacion(correo, nombre, codigo) {
-    const { data, error } = await resend.emails.send({
-        from: "StarView <onboarding@resend.dev>", // Este es el correo de prueba oficial de Resend
-        to: correo,
-        subject: "Código de verificación - StarView",
-        html: `
-            <div style="font-family: Arial, sans-serif; background:#080b14; padding:30px; color:#ffffff;">
-                <div style="max-width:560px; margin:auto; background:#111827; border-radius:20px; padding:30px; border:1px solid rgba(255,255,255,.12);">
-                    <h1 style="color:#ff3045; margin-top:0; letter-spacing:2px;">STARVIEW</h1>
-                    <h2 style="margin-bottom:10px;">Verifica tu cuenta</h2>
-                    <p>Hola <strong>${nombre}</strong>,</p>
-                    <p>Gracias por registrarte en StarView. Usa el siguiente código para verificar tu cuenta:</p>
-                    <div style="font-size:34px; font-weight:bold; letter-spacing:8px; background:#0b1020; border-radius:14px; padding:18px; text-align:center; color:#86efac; margin:24px 0;">
-                        ${codigo}
-                    </div>
-                    <p>Este código vence en 10 minutos.</p>
-                </div>
-            </div>
-        `
-    });
+    // Pega aquí la URL que te acaba de dar Google Apps Script
+    const urlGoogleScript = "https://script.google.com/macros/s/AKfycbwoBuUvkjHGh0LWHiOJvZfg9HtkalQQNYeRLefQVPVYSXzoOxY_jzRGn342e-ox3NWO/exec";
 
-    if (error) {
-        throw new Error(error.message);
+    try {
+        await axios.post(urlGoogleScript, JSON.stringify({ correo, nombre, codigo }), {
+            headers: { "Content-Type": "text/plain" } // Usamos text/plain para evitar redirecciones de Google
+        });
+    } catch (error) {
+        console.log("Error con el Script de Google:", error.message);
+        throw new Error("Fallo en la API de correos");
     }
 }
 
