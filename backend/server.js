@@ -5,9 +5,8 @@ const bcrypt = require("bcrypt");
 const path = require("path");
 const nodemailer = require("nodemailer");
 
-require("dotenv").config({
-    path: path.join(__dirname, "../.env")
-});
+// CAMBIO AQUÍ: Así funciona tanto en local como en Railway
+require("dotenv").config();
 
 
 const conexion = require("./db");
