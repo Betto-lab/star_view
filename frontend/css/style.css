@@ -1996,7 +1996,7 @@ textarea:focus{
     .perfiles-section h1{
         font-size:38px;
     }
-}   
+}
 
 /* ===============================
    CAMPO CONTRASEÑA CON BOTÓN VER
@@ -2009,18 +2009,18 @@ textarea:focus{
 
 .password-field input {
     width: 100%;
-    padding-right: 82px !important;
+    padding-right: 95px !important;
 }
 
 .password-toggle {
     position: absolute !important;
     top: 50%;
-    right: 12px;
+    right: 14px;
     transform: translateY(-50%);
     width: auto !important;
-    min-width: 54px;
-    height: 34px;
-    padding: 0 14px !important;
+    min-width: 62px;
+    height: 38px;
+    padding: 0 16px !important;
     border: none;
     border-radius: 999px;
     background: rgba(255, 255, 255, 0.14);
@@ -2028,7 +2028,7 @@ textarea:focus{
     font-size: 13px;
     font-weight: 800;
     cursor: pointer;
-    z-index: 5;
+    z-index: 10;
 }
 
 .password-toggle:hover {
@@ -2037,14 +2037,14 @@ textarea:focus{
 
 @media (max-width: 600px) {
     .password-field input {
-        padding-right: 78px !important;
+        padding-right: 86px !important;
     }
 
     .password-toggle {
         right: 10px;
-        min-width: 48px;
-        height: 32px;
+        min-width: 54px;
+        height: 34px;
+        padding: 0 12px !important;
         font-size: 12px;
-        padding: 0 11px !important;
     }
 }

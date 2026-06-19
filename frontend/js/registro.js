@@ -43,6 +43,21 @@ function validarPassword(password) {
     };
 }
 
+function visualizarPasswordRegistro() {
+    const passwordInput = document.getElementById("password");
+    const boton = document.querySelector(".password-toggle");
+
+    if (!passwordInput || !boton) return;
+
+    if (passwordInput.type === "password") {
+        passwordInput.type = "text";
+        boton.innerText = "Ocultar";
+    } else {
+        passwordInput.type = "password";
+        boton.innerText = "Ver";
+    }
+}
+
 function calcularFortalezaPassword(password) {
     let puntos = 0;
 
@@ -85,30 +100,28 @@ function calcularFortalezaPassword(password) {
 }
 
 function actualizarReglasPassword() {
-    const password = document.getElementById("password").value;
+    const passwordInput = document.getElementById("password");
+
+    if (!passwordInput) return;
+
+    const password = passwordInput.value;
     const reglas = validarPassword(password);
 
-  function visualizarPasswordRegistro() {
-    const passwordInput = document.getElementById("password");
-    const boton = document.querySelector(".toggle-password-btn");
-
-    if (!passwordInput || !boton) return;
-
-    if (passwordInput.type === "password") {
-        passwordInput.type = "text";
-        boton.innerText = "Ocultar";
-    } else {
-        passwordInput.type = "password";
-        boton.innerText = "Ver";
-    }
-}
     const ruleLength = document.getElementById("ruleLength");
     const ruleNumber = document.getElementById("ruleNumber");
     const ruleSymbol = document.getElementById("ruleSymbol");
 
-    ruleLength.className = reglas.tieneLongitud ? "rule-ok" : "rule-error";
-    ruleNumber.className = reglas.tieneNumero ? "rule-ok" : "rule-error";
-    ruleSymbol.className = reglas.tieneSimbolo ? "rule-ok" : "rule-error";
+    if (ruleLength) {
+        ruleLength.className = reglas.tieneLongitud ? "rule-ok" : "rule-error";
+    }
+
+    if (ruleNumber) {
+        ruleNumber.className = reglas.tieneNumero ? "rule-ok" : "rule-error";
+    }
+
+    if (ruleSymbol) {
+        ruleSymbol.className = reglas.tieneSimbolo ? "rule-ok" : "rule-error";
+    }
 
     const strengthBox = document.getElementById("passwordStrengthBox");
     const strengthBar = document.getElementById("strengthBar");
@@ -116,19 +129,40 @@ function actualizarReglasPassword() {
 
     const fortaleza = calcularFortalezaPassword(password);
 
-    strengthBox.className = `password-strength-box ${fortaleza.nivel}`;
-    strengthBar.style.width = fortaleza.porcentaje;
-    strengthText.innerText = fortaleza.texto;
+    if (strengthBox) {
+        strengthBox.className = `password-strength-box ${fortaleza.nivel}`;
+    }
+
+    if (strengthBar) {
+        strengthBar.style.width = fortaleza.porcentaje;
+    }
+
+    if (strengthText) {
+        strengthText.innerText = fortaleza.texto;
+    }
 }
 
 function abrirModalVerificacion() {
-    document.getElementById("codigoVerificacion").value = "";
+    const codigoVerificacion = document.getElementById("codigoVerificacion");
+    const modalVerificacion = document.getElementById("modalVerificacion");
+
+    if (codigoVerificacion) {
+        codigoVerificacion.value = "";
+    }
+
     mostrarMensajeVerificacion("");
-    document.getElementById("modalVerificacion").classList.add("show");
+
+    if (modalVerificacion) {
+        modalVerificacion.classList.add("show");
+    }
 }
 
 function cerrarModalVerificacion() {
-    document.getElementById("modalVerificacion").classList.remove("show");
+    const modalVerificacion = document.getElementById("modalVerificacion");
+
+    if (modalVerificacion) {
+        modalVerificacion.classList.remove("show");
+    }
 }
 
 async function registrarUsuario() {
@@ -158,13 +192,16 @@ async function registrarUsuario() {
         return;
     }
 
-    const btnRegistro = document.querySelector(".btn-full");
-    const textoOriginal = btnRegistro.innerText;
+    const btnRegistro = document.getElementById("btnRegistro") || document.querySelector(".btn-full");
+    const textoOriginal = btnRegistro ? btnRegistro.innerText : "Crear cuenta";
 
-    btnRegistro.innerText = "Enviando código...";
-    btnRegistro.disabled = true;
+    if (btnRegistro) {
+        btnRegistro.innerText = "Enviando código...";
+        btnRegistro.disabled = true;
+    }
+
     mostrarMensaje("Enviando código de verificación al correo...", "ok");
-    
+
     try {
         const respuesta = await fetch(`${API_BASE}/registro`, {
             method: "POST",
@@ -180,8 +217,10 @@ async function registrarUsuario() {
 
         const datos = await respuesta.json();
 
-        btnRegistro.innerText = textoOriginal;
-        btnRegistro.disabled = false;
+        if (btnRegistro) {
+            btnRegistro.innerText = textoOriginal;
+            btnRegistro.disabled = false;
+        }
 
         if (!datos.ok) {
             mostrarMensaje(datos.mensaje || "No se pudo registrar el usuario");
@@ -196,8 +235,10 @@ async function registrarUsuario() {
     } catch (error) {
         console.log(error);
 
-        btnRegistro.innerText = textoOriginal;
-        btnRegistro.disabled = false;
+        if (btnRegistro) {
+            btnRegistro.innerText = textoOriginal;
+            btnRegistro.disabled = false;
+        }
 
         mostrarMensaje("No se pudo conectar con el servidor");
     }
@@ -230,17 +271,17 @@ async function verificarCodigoRegistro() {
             return;
         }
 
-            localStorage.setItem("usuario_id", datos.usuario.id);
-            localStorage.setItem("nombre_usuario", datos.usuario.nombre);
-            localStorage.removeItem("perfil_id");
-            localStorage.removeItem("perfil_nombre");
+        localStorage.setItem("usuario_id", datos.usuario.id);
+        localStorage.setItem("nombre_usuario", datos.usuario.nombre);
+        localStorage.removeItem("perfil_id");
+        localStorage.removeItem("perfil_nombre");
 
-            mostrarMensajeVerificacion("Registro exitoso. Ahora elige un plan para continuar.", "ok");
+        mostrarMensajeVerificacion("Registro exitoso. Ahora elige un plan para continuar.", "ok");
 
-            setTimeout(() => {
-                cerrarModalVerificacion();
-                window.location.replace("planes.html");
-            }, 1200);
+        setTimeout(() => {
+            cerrarModalVerificacion();
+            window.location.replace("planes.html");
+        }, 1200);
 
     } catch (error) {
         console.log(error);

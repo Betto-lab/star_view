@@ -57,7 +57,7 @@ function generarCodigoVerificacion() {
 
 async function enviarCorreoVerificacion(correo, nombre, codigo) {
     await transporter.sendMail({
-        from: process.env.EMAIL_FROM,
+        from: process.env.EMAIL_FROM || `StarView <${process.env.EMAIL_USER}>`,
         to: correo,
         subject: "Código de verificación - StarView",
         html: `
@@ -111,11 +111,11 @@ app.post("/registro", async (req, res) => {
     }
 
     if (!validarSoloLetras(nombre)) {
-    return res.json({
-        ok: false,
-        mensaje: "El nombre solo puede contener letras y espacios"
-    });
-}
+        return res.json({
+            ok: false,
+            mensaje: "El nombre solo puede contener letras y espacios"
+        });
+    }
 
     if (!validarFormatoCorreo(correo)) {
         return res.json({
