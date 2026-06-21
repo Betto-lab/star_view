@@ -5,10 +5,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Reproductor | StarView</title>
     <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/reproductor.css">
 </head>
 <body class="player-body">
 
-<header class="topbar app-topbar">
+<header class="topbar app-topbar netflix-topbar">
     <div class="brand">STAR<span>VIEW</span></div>
 
     <nav class="nav">
@@ -18,59 +19,74 @@
     </nav>
 </header>
 
-<main class="player-layout">
-    <section class="player-info">
-        <img id="imagenContenido" class="player-poster" alt="Poster del contenido">
+<main class="netflix-player-page">
 
-        <div>
-            <p class="eyebrow">Reproduciendo ahora</p>
-            <h1 id="tituloContenido"></h1>
-            <p id="tipoContenido" class="meta-line"></p>
-            <p id="generoContenido" class="meta-line"></p>
-            <p id="descripcionContenido" class="player-description"></p>
+    <section class="hero-player" id="heroPlayer">
+        <div class="hero-overlay"></div>
 
-            <div class="player-actions">
-                <button class="btn btn-primary" onclick="marcarVisto()">Marcar como visto</button>
-                <a href="home.html" class="btn btn-secondary">Volver al catálogo</a>
+        <div class="hero-content">
+            <p class="hero-eyebrow">REPRODUCIENDO AHORA</p>
+            <h1 id="tituloContenido">Título</h1>
+
+            <div class="hero-meta">
+                <span id="tipoContenido">Tipo</span>
+                <span>•</span>
+                <span id="generoContenido">Género</span>
+            </div>
+
+            <p id="descripcionContenido" class="hero-description">
+                Descripción del contenido.
+            </p>
+
+            <div class="hero-buttons">
+                <button class="btn btn-primary" onclick="reproducirVideo()">▶ Reproducir</button>
+                <button class="btn btn-secondary" onclick="marcarVisto()">✔ Marcar como visto</button>
+                <a href="home.html" class="btn btn-dark">← Volver al catálogo</a>
             </div>
         </div>
     </section>
 
-    <section class="video-shell" id="videoContenedor">
-        <video id="videoPlayer" poster="img/backdrop.jpg">
-            <source src="videos/demo.mp4" type="video/mp4">
-            Tu navegador no soporta video.
-        </video>
+    <section class="video-player-section">
+        <div class="video-card" id="videoContenedor">
+            <video id="videoPlayer" poster="img/backdrop.jpg" preload="metadata" playsinline>
+                <source src="videos/demo.mp4" type="video/mp4">
+                Tu navegador no soporta video.
+            </video>
 
-        <div class="controles-personalizados" id="controlesVideo">
-            <div class="controles-progreso">
-                <input type="range" id="barraProgreso" value="0" min="0" step="0.1">
+            <div id="mensajeProgresoVideo" class="player-progress-note">
+                Cargando progreso del video...
             </div>
-            
-            <div class="controles-botones">
-                <div class="controles-izquierda">
-                    <button id="btnPlayPause" class="btn-control">▶ Play</button>
-                    <button id="btnRetroceder" class="btn-control">⏪ 10s</button>
-                    <button id="btnAdelantar" class="btn-control">30s ⏩</button>
-                    
-                    <div class="control-volumen">
-                        <span>🔊</span>
-                        <input type="range" id="barraVolumen" min="0" max="1" step="0.1" value="1">
+
+            <div class="controles-personalizados" id="controlesVideo">
+                <div class="controles-progreso">
+                    <input type="range" id="barraProgreso" value="0" min="0" max="100" step="0.1">
+                </div>
+
+                <div class="controles-botones">
+                    <div class="controles-izquierda">
+                        <button id="btnPlayPause" class="btn-control">▶ Play</button>
+                        <button id="btnRetroceder" class="btn-control">⏪ 10s</button>
+                        <button id="btnAdelantar" class="btn-control">30s ⏩</button>
+
+                        <div class="control-volumen">
+                            <span>🔊</span>
+                            <input type="range" id="barraVolumen" min="0" max="1" step="0.1" value="1">
+                        </div>
+                    </div>
+
+                    <div class="controles-derecha">
+                        <button id="btnPantallaCompleta" class="btn-control">⛶ Pantalla completa</button>
                     </div>
                 </div>
-                
-                <div class="controles-derecha">
-                    <button id="btnPantallaCompleta" class="btn-control">🔲 Pantalla Completa</button>
-                </div>
             </div>
         </div>
     </section>
 
-    <section class="recomendaciones-wrapper" style="margin-top: 40px;">
-        <h3 style="color: white; margin-bottom: 15px;">Porque estás viendo esto, te recomendamos:</h3>
-        <div class="slider-peliculas" id="contenedorRecomendaciones" style="display: flex; gap: 15px; overflow-x: auto; padding-bottom: 15px;">
-            </div>
+    <section class="recomendaciones-netflix">
+        <h2>Porque estás viendo esto, te recomendamos:</h2>
+        <div class="slider-peliculas" id="contenedorRecomendaciones"></div>
     </section>
+
 </main>
 
 <script src="js/reproductor.js"></script>

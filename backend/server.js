@@ -22,6 +22,7 @@ const TMDB_API_KEY = "14848f0a935d7e54d7c8ced042603214";
 const app = express();
 
 const registrosPendientes = new Map();
+const recuperacionesPerfil = new Map();
 
 
 function validarFormatoCorreo(correo) {
@@ -438,27 +439,32 @@ app.post("/perfiles", (req, res) => {
     );
 });
 
-app.post("/perfiles/verificar", (req, res) => {
-    const { usuario_id, perfil_id, password_perfil } = req.body;
+app.post("/perfiles/recuperar-iniciar", (req, res) => {
+    const { usuario_id, perfil_id } = req.body;
 
-    if (!usuario_id || !perfil_id || !password_perfil) {
+    if (!usuario_id || !perfil_id) {
         return res.json({
             ok: false,
-            mensaje: "Ingresa la contraseña del perfil"
+            mensaje: "Datos incompletos para recuperar contraseña"
         });
     }
 
     conexion.query(
-        `SELECT id, nombre, password_perfil
+        `SELECT 
+            perfiles.id AS perfil_id,
+            perfiles.nombre AS perfil_nombre,
+            usuarios.nombre AS usuario_nombre,
+            usuarios.correo AS usuario_correo
          FROM perfiles
-         WHERE id = ? AND usuario_id = ?`,
+         INNER JOIN usuarios ON perfiles.usuario_id = usuarios.id
+         WHERE perfiles.id = ? AND perfiles.usuario_id = ?`,
         [perfil_id, usuario_id],
         async (error, resultados) => {
             if (error) {
                 console.log(error);
                 return res.json({
                     ok: false,
-                    mensaje: "Error al verificar perfil"
+                    mensaje: "Error al buscar el perfil"
                 });
             }
 
@@ -469,38 +475,120 @@ app.post("/perfiles/verificar", (req, res) => {
                 });
             }
 
-            const perfil = resultados[0];
+            const datos = resultados[0];
+            const codigo = generarCodigoVerificacion();
+            const clave = `${usuario_id}:${perfil_id}`;
 
-            if (!perfil.password_perfil) {
-                return res.json({
-                    ok: true,
-                    mensaje: "Perfil sin contraseña configurada",
-                    perfil: {
-                        id: perfil.id,
-                        nombre: perfil.nombre
-                    }
-                });
-            }
-
-            const passwordValida = await bcrypt.compare(password_perfil, perfil.password_perfil);
-
-            if (!passwordValida) {
-                return res.json({
-                    ok: false,
-                    mensaje: "Contraseña de perfil incorrecta"
-                });
-            }
-
-            res.json({
-                ok: true,
-                mensaje: "Perfil verificado correctamente",
-                perfil: {
-                    id: perfil.id,
-                    nombre: perfil.nombre
-                }
+            recuperacionesPerfil.set(clave, {
+                usuario_id,
+                perfil_id,
+                codigo,
+                creado: Date.now()
             });
+
+            try {
+                await enviarCorreoVerificacion(
+                    datos.usuario_correo,
+                    datos.usuario_nombre,
+                    codigo
+                );
+
+                res.json({
+                    ok: true,
+                    mensaje: "Código enviado al correo del usuario"
+                });
+
+            } catch (errorCorreo) {
+                console.log("Error al enviar código de recuperación de perfil:", errorCorreo);
+
+                recuperacionesPerfil.delete(clave);
+
+                res.json({
+                    ok: false,
+                    mensaje: "No se pudo enviar el código de recuperación"
+                });
+            }
         }
     );
+});
+
+app.post("/perfiles/recuperar-confirmar", (req, res) => {
+    const { usuario_id, perfil_id, codigo, nueva_password } = req.body;
+
+    if (!usuario_id || !perfil_id || !codigo || !nueva_password) {
+        return res.json({
+            ok: false,
+            mensaje: "Completa código y nueva contraseña"
+        });
+    }
+
+    if (nueva_password.length < 4) {
+        return res.json({
+            ok: false,
+            mensaje: "La nueva contraseña debe tener mínimo 4 caracteres"
+        });
+    }
+
+    const clave = `${usuario_id}:${perfil_id}`;
+    const recuperacion = recuperacionesPerfil.get(clave);
+
+    if (!recuperacion) {
+        return res.json({
+            ok: false,
+            mensaje: "No existe una solicitud de recuperación pendiente"
+        });
+    }
+
+    const tiempoExpirado = Date.now() - recuperacion.creado > 10 * 60 * 1000;
+
+    if (tiempoExpirado) {
+        recuperacionesPerfil.delete(clave);
+
+        return res.json({
+            ok: false,
+            mensaje: "El código expiró. Solicita uno nuevo"
+        });
+    }
+
+    if (recuperacion.codigo !== codigo) {
+        return res.json({
+            ok: false,
+            mensaje: "El código ingresado es incorrecto"
+        });
+    }
+
+    bcrypt.hash(nueva_password, 10, (errorHash, passwordHash) => {
+        if (errorHash) {
+            console.log(errorHash);
+            return res.json({
+                ok: false,
+                mensaje: "Error al proteger la nueva contraseña"
+            });
+        }
+
+        conexion.query(
+            `UPDATE perfiles
+             SET password_perfil = ?
+             WHERE id = ? AND usuario_id = ?`,
+            [passwordHash, perfil_id, usuario_id],
+            (error) => {
+                if (error) {
+                    console.log(error);
+                    return res.json({
+                        ok: false,
+                        mensaje: "No se pudo actualizar la contraseña del perfil"
+                    });
+                }
+
+                recuperacionesPerfil.delete(clave);
+
+                res.json({
+                    ok: true,
+                    mensaje: "Contraseña del perfil actualizada correctamente"
+                });
+            }
+        );
+    });
 });
 
 /* =========================

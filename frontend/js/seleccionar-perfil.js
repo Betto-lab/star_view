@@ -1,6 +1,7 @@
 const API_BASE = window.location.origin;
 
 let perfilPendiente = null;
+let perfilRecuperacion = null;
 
 function cerrarSesion() {
     localStorage.clear();
@@ -30,6 +31,15 @@ function mostrarMensajePerfil(texto, tipo = "error") {
 
 function mostrarMensajeClave(texto, tipo = "error") {
     const mensaje = document.getElementById("mensajeClavePerfil");
+
+    if (!mensaje) return;
+
+    mensaje.innerText = texto;
+    mensaje.style.color = tipo === "ok" ? "#86efac" : "#ffb4b8";
+}
+
+function mostrarMensajeRecuperar(texto, tipo = "error") {
+    const mensaje = document.getElementById("mensajeRecuperarPerfil");
 
     if (!mensaje) return;
 
@@ -84,6 +94,7 @@ function obtenerNombreAvatar(avatar) {
 
     return "Red.jpg";
 }
+
 function inicialPerfil(nombre) {
     return String(nombre || "P").trim().charAt(0).toUpperCase();
 }
@@ -275,18 +286,174 @@ async function validarIngresoPerfil() {
     }
 }
 
+function abrirModalRecuperarPerfil() {
+    if (!perfilPendiente) {
+        mostrarMensajeClave("Selecciona un perfil primero");
+        return;
+    }
+
+    perfilRecuperacion = perfilPendiente;
+
+    document.getElementById("modalRecuperarPerfilNombre").innerText = `Recuperar: ${perfilRecuperacion.nombre}`;
+    document.getElementById("codigoRecuperarPerfil").value = "";
+    document.getElementById("nuevaPasswordPerfil").value = "";
+    document.getElementById("confirmarNuevaPasswordPerfil").value = "";
+
+    mostrarMensajeRecuperar("");
+
+    document.getElementById("modalClavePerfil").classList.remove("show");
+    document.getElementById("modalRecuperarPerfil").classList.add("show");
+}
+
+function cerrarModalRecuperarPerfil() {
+    document.getElementById("modalRecuperarPerfil").classList.remove("show");
+
+    if (perfilRecuperacion) {
+        perfilPendiente = perfilRecuperacion;
+        document.getElementById("modalClavePerfil").classList.add("show");
+    }
+}
+
+async function enviarCodigoRecuperacionPerfil() {
+    const usuario_id = obtenerUsuarioId();
+
+    if (!usuario_id || !perfilRecuperacion) {
+        mostrarMensajeRecuperar("No se encontró el perfil seleccionado");
+        return;
+    }
+
+    const boton = document.getElementById("btnEnviarCodigoPerfil");
+    const textoOriginal = boton.innerText;
+
+    boton.innerText = "Enviando código...";
+    boton.disabled = true;
+
+    mostrarMensajeRecuperar("Enviando código al correo de la cuenta...", "ok");
+
+    try {
+        const respuesta = await fetch(`${API_BASE}/perfiles/recuperar-iniciar`, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+                usuario_id,
+                perfil_id: perfilRecuperacion.id
+            })
+        });
+
+        const datos = await respuesta.json();
+
+        boton.innerText = textoOriginal;
+        boton.disabled = false;
+
+        if (!datos.ok) {
+            mostrarMensajeRecuperar(datos.mensaje || "No se pudo enviar el código");
+            return;
+        }
+
+        mostrarMensajeRecuperar("Código enviado. Revisa el correo de la cuenta.", "ok");
+
+    } catch (error) {
+        console.log(error);
+
+        boton.innerText = textoOriginal;
+        boton.disabled = false;
+
+        mostrarMensajeRecuperar("No se pudo conectar con el servidor");
+    }
+}
+
+async function restablecerPasswordPerfil() {
+    const usuario_id = obtenerUsuarioId();
+
+    if (!usuario_id || !perfilRecuperacion) {
+        mostrarMensajeRecuperar("No se encontró el perfil seleccionado");
+        return;
+    }
+
+    const codigo = document.getElementById("codigoRecuperarPerfil").value.trim();
+    const nuevaPassword = document.getElementById("nuevaPasswordPerfil").value.trim();
+    const confirmarPassword = document.getElementById("confirmarNuevaPasswordPerfil").value.trim();
+
+    if (!codigo || !nuevaPassword || !confirmarPassword) {
+        mostrarMensajeRecuperar("Completa código y nueva contraseña");
+        return;
+    }
+
+    if (nuevaPassword.length < 4) {
+        mostrarMensajeRecuperar("La nueva contraseña debe tener mínimo 4 caracteres");
+        return;
+    }
+
+    if (nuevaPassword !== confirmarPassword) {
+        mostrarMensajeRecuperar("Las contraseñas no coinciden");
+        return;
+    }
+
+    try {
+        const respuesta = await fetch(`${API_BASE}/perfiles/recuperar-confirmar`, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+                usuario_id,
+                perfil_id: perfilRecuperacion.id,
+                codigo,
+                nueva_password: nuevaPassword
+            })
+        });
+
+        const datos = await respuesta.json();
+
+        if (!datos.ok) {
+            mostrarMensajeRecuperar(datos.mensaje || "No se pudo cambiar la contraseña");
+            return;
+        }
+
+        mostrarMensajeRecuperar("Contraseña actualizada correctamente", "ok");
+
+        setTimeout(() => {
+            document.getElementById("modalRecuperarPerfil").classList.remove("show");
+            perfilPendiente = perfilRecuperacion;
+            perfilRecuperacion = null;
+
+            document.getElementById("passwordIngresoPerfil").value = "";
+            mostrarMensajeClave("Ahora ingresa con tu nueva contraseña", "ok");
+            document.getElementById("modalClavePerfil").classList.add("show");
+        }, 900);
+
+    } catch (error) {
+        console.log(error);
+        mostrarMensajeRecuperar("No se pudo conectar con el servidor");
+    }
+}
+
 document.addEventListener("DOMContentLoaded", cargarPerfiles);
 
 document.addEventListener("keydown", (event) => {
     if (event.key === "Enter") {
-        const modalAbierto = document.getElementById("modalClavePerfil")?.classList.contains("show");
+        const modalRecuperarAbierto = document.getElementById("modalRecuperarPerfil")?.classList.contains("show");
+        const modalClaveAbierto = document.getElementById("modalClavePerfil")?.classList.contains("show");
 
-        if (modalAbierto) {
+        if (modalRecuperarAbierto) {
+            restablecerPasswordPerfil();
+            return;
+        }
+
+        if (modalClaveAbierto) {
             validarIngresoPerfil();
         }
     }
 
     if (event.key === "Escape") {
-        cerrarModalClavePerfil();
+        const modalRecuperarAbierto = document.getElementById("modalRecuperarPerfil")?.classList.contains("show");
+
+        if (modalRecuperarAbierto) {
+            cerrarModalRecuperarPerfil();
+        } else {
+            cerrarModalClavePerfil();
+        }
     }
 });

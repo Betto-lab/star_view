@@ -38,35 +38,33 @@
         <label>Selecciona un avatar</label>
         <input type="hidden" id="avatarPerfil" value="Red.jpg">
 
+        <div class="avatar-list" id="avatarList">
+            <button type="button" class="avatar-option active" data-avatar="Red.jpg" onclick="seleccionarAvatarPerfil('Red.jpg', this)">
+                <img src="img/Red.jpg" alt="Avatar Red" class="avatar-img-option">
+                <strong>Ranger Red</strong>
+            </button>
 
-<div class="avatar-list" id="avatarList">
+            <button type="button" class="avatar-option" data-avatar="Blue.jpg" onclick="seleccionarAvatarPerfil('Blue.jpg', this)">
+                <img src="img/Blue.jpg" alt="Avatar Blue" class="avatar-img-option">
+                <strong>Ranger Blue</strong>
+            </button>
 
-    <button type="button" class="avatar-option active" data-avatar="Red.jpg" onclick="seleccionarAvatarPerfil('Red.jpg', this)">
-        <img src="img/Red.jpg" alt="Avatar Red" class="avatar-img-option">
-        <strong>Ranger Red</strong>
-    </button>
+            <button type="button" class="avatar-option" data-avatar="Green.jpg" onclick="seleccionarAvatarPerfil('Green.jpg', this)">
+                <img src="img/Green.jpg" alt="Avatar Green" class="avatar-img-option">
+                <strong>Ranger Green</strong>
+            </button>
 
-    <button type="button" class="avatar-option" data-avatar="Blue.jpg" onclick="seleccionarAvatarPerfil('Blue.jpg', this)">
-        <img src="img/Blue.jpg" alt="Avatar Blue" class="avatar-img-option">
-        <strong>Ranger Blue</strong>
-    </button>
+            <button type="button" class="avatar-option" data-avatar="Yellow.jpg" onclick="seleccionarAvatarPerfil('Yellow.jpg', this)">
+                <img src="img/Yellow.jpg" alt="Avatar Yellow" class="avatar-img-option">
+                <strong>Ranger Yellow</strong>
+            </button>
 
-    <button type="button" class="avatar-option" data-avatar="Green.jpg" onclick="seleccionarAvatarPerfil('Green.jpg', this)">
-        <img src="img/Green.jpg" alt="Avatar Green" class="avatar-img-option">
-        <strong>Ranger Green</strong>
-    </button>
+            <button type="button" class="avatar-option" data-avatar="Pink.jpg" onclick="seleccionarAvatarPerfil('Pink.jpg', this)">
+                <img src="img/Pink.jpg" alt="Avatar Pink" class="avatar-img-option">
+                <strong>Ranger Pink</strong>
+            </button>
+        </div>
 
-    <button type="button" class="avatar-option" data-avatar="Yellow.jpg" onclick="seleccionarAvatarPerfil('Yellow.jpg', this)">
-        <img src="img/Yellow.jpg" alt="Avatar Yellow" class="avatar-img-option">
-        <strong>Ranger Yellow</strong>
-    </button>
-
-    <button type="button" class="avatar-option" data-avatar="Pink.jpg" onclick="seleccionarAvatarPerfil('Pink.jpg', this)">
-        <img src="img/Pink.jpg" alt="Avatar Pink" class="avatar-img-option">
-        <strong>Ranger Pink</strong>
-    </button>
-
-</div>
         <label for="passwordPerfil">Contraseña del perfil</label>
         <input type="password" id="passwordPerfil" placeholder="Mínimo 4 caracteres">
 
@@ -98,6 +96,10 @@
         <label for="passwordIngresoPerfil">Contraseña del perfil</label>
         <input type="password" id="passwordIngresoPerfil" placeholder="Contraseña">
 
+        <button type="button" class="btn-link-profile" onclick="abrirModalRecuperarPerfil()">
+            Olvidé la contraseña del perfil
+        </button>
+
         <p id="mensajeClavePerfil" class="mensaje"></p>
 
         <div class="modal-actions">
@@ -107,6 +109,42 @@
 
             <button class="btn btn-primary" onclick="validarIngresoPerfil()">
                 Ingresar
+            </button>
+        </div>
+    </section>
+</div>
+
+<div id="modalRecuperarPerfil" class="modal-overlay">
+    <section class="modal-card">
+        <p class="eyebrow">Recuperar perfil</p>
+        <h2 id="modalRecuperarPerfilNombre">Recuperar contraseña</h2>
+
+        <p>
+            Te enviaremos un código al correo de la cuenta principal para restablecer la contraseña de este perfil.
+        </p>
+
+        <button id="btnEnviarCodigoPerfil" class="btn btn-secondary btn-full" onclick="enviarCodigoRecuperacionPerfil()">
+            Enviar código al correo
+        </button>
+
+        <label for="codigoRecuperarPerfil">Código recibido</label>
+        <input type="text" id="codigoRecuperarPerfil" placeholder="Ejemplo: 123456" maxlength="6">
+
+        <label for="nuevaPasswordPerfil">Nueva contraseña</label>
+        <input type="password" id="nuevaPasswordPerfil" placeholder="Mínimo 4 caracteres">
+
+        <label for="confirmarNuevaPasswordPerfil">Confirmar nueva contraseña</label>
+        <input type="password" id="confirmarNuevaPasswordPerfil" placeholder="Repite la nueva contraseña">
+
+        <p id="mensajeRecuperarPerfil" class="mensaje"></p>
+
+        <div class="modal-actions">
+            <button class="btn btn-secondary" onclick="cerrarModalRecuperarPerfil()">
+                Cancelar
+            </button>
+
+            <button class="btn btn-primary" onclick="restablecerPasswordPerfil()">
+                Cambiar contraseña
             </button>
         </div>
     </section>

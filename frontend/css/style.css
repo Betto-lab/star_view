@@ -2070,3 +2070,25 @@ textarea:focus{
     box-shadow: 0 10px 20px rgba(229, 9, 20, 0.3); /* Un brillo rojo sutil */
     border: 1px solid rgba(229, 9, 20, 0.5); /* Borde luminoso */
 }
+
+/* ===============================
+   RECUPERAR CONTRASEÑA DE PERFIL
+================================ */
+
+.btn-link-profile {
+    display: inline-block;
+    margin: 10px 0 4px;
+    padding: 0;
+    border: none;
+    background: transparent;
+    color: #86efac;
+    font-size: 14px;
+    font-weight: 800;
+    cursor: pointer;
+    text-align: left;
+}
+
+.btn-link-profile:hover {
+    color: #ffffff;
+    text-decoration: underline;
+}

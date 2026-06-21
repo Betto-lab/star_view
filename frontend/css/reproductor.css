@@ -1,89 +1,591 @@
-.player-body{background:radial-gradient(circle at top right,rgba(229,9,20,.16),transparent 30%),#050508;}
-.player-layout{display:grid;grid-template-columns:minmax(0,1fr) 360px;gap:28px;padding:34px 0 70px;align-items:start;}
-.player-panel{border-radius:28px;overflow:hidden;background:#000;border:1px solid rgba(255,255,255,.1);box-shadow:0 24px 80px rgba(0,0,0,.5);}
-#videoPlayer{display:block;width:100%;aspect-ratio:16/9;background:#000;}
-.player-progress-note{padding:14px 18px;color:#a6a7b3;background:rgba(255,255,255,.05);font-size:.92rem;}
-.player-info{border-radius:28px;padding:22px;position:sticky;top:100px;}
-.player-info img{width:100%;height:440px;object-fit:cover;border-radius:22px;margin-bottom:18px;background:#20202a;}
-.player-info h1{font-size:2rem;line-height:1.05;margin:14px 0;letter-spacing:-1px;}
-.player-info p{color:#d8d8e0;line-height:1.6;margin-bottom:14px;}
-@media (max-width:980px){.player-layout{grid-template-columns:1fr;}.player-info{position:static;}.player-info img{height:360px;object-fit:cover;}}
-@media (max-width:560px){.player-layout{padding-top:20px;}.player-info img{height:300px;}}
-
-
 /* =========================================================
-   RESPONSIVE REPRODUCTOR - STARVIEW
+   REPRODUCTOR COMPACTO - STARVIEW
 ========================================================= */
 
-@media (min-width: 1600px) {
-    .player-page,
-    .reproductor-page {
-        padding-left: 70px;
-        padding-right: 70px;
+.player-body {
+    margin: 0;
+    background: #050508;
+    color: #ffffff;
+    font-family: Arial, Helvetica, sans-serif;
+}
+
+.netflix-topbar {
+    position: sticky;
+    top: 0;
+    z-index: 50;
+    background: rgba(5, 5, 8, 0.95);
+    backdrop-filter: blur(8px);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+/* CONTENEDOR GENERAL */
+.netflix-player-page {
+    width: 100%;
+    min-height: 100vh;
+    background:
+        radial-gradient(circle at top right, rgba(229, 9, 20, 0.14), transparent 28%),
+        #050508;
+}
+
+/* =========================================================
+   HERO REDUCIDO
+========================================================= */
+
+.hero-player {
+    position: relative;
+    width: min(1320px, calc(100% - 64px));
+    min-height: 320px;
+    margin: 28px auto 0;
+    display: flex;
+    align-items: center;
+    padding: 42px 46px;
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    border-radius: 28px;
+    overflow: hidden;
+    border: 1px solid rgba(255, 255, 255, 0.10);
+    box-shadow: 0 24px 70px rgba(0, 0, 0, 0.45);
+}
+
+.hero-overlay {
+    position: absolute;
+    inset: 0;
+    background:
+        linear-gradient(to right, rgba(0, 0, 0, 0.92) 0%, rgba(0, 0, 0, 0.72) 42%, rgba(0, 0, 0, 0.28) 100%),
+        linear-gradient(to top, rgba(5, 5, 8, 0.85), rgba(5, 5, 8, 0.05));
+    z-index: 1;
+}
+
+.hero-content {
+    position: relative;
+    z-index: 2;
+    max-width: 620px;
+}
+
+.hero-eyebrow {
+    color: #d1d5db;
+    font-size: 13px;
+    font-weight: 900;
+    letter-spacing: 3px;
+    margin-bottom: 12px;
+}
+
+.hero-content h1 {
+    font-size: 42px;
+    line-height: 1.05;
+    font-weight: 900;
+    margin: 0 0 14px;
+    text-shadow: 0 4px 24px rgba(0, 0, 0, 0.55);
+}
+
+.hero-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    font-size: 15px;
+    font-weight: 800;
+    color: #e5e7eb;
+    margin-bottom: 14px;
+}
+
+.hero-description {
+    font-size: 16px;
+    line-height: 1.55;
+    color: #f3f4f6;
+    margin-bottom: 20px;
+    max-width: 580px;
+    text-shadow: 0 2px 18px rgba(0, 0, 0, 0.45);
+}
+
+.hero-buttons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+
+.btn-dark {
+    background: rgba(109, 109, 110, 0.65);
+    color: #fff;
+    text-decoration: none;
+    border-radius: 999px;
+    padding: 13px 20px;
+    font-weight: 800;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.btn-dark:hover {
+    background: rgba(109, 109, 110, 0.85);
+}
+
+/* =========================================================
+   VIDEO MÁS PEQUEÑO Y CENTRADO
+========================================================= */
+
+.video-player-section {
+    width: min(1320px, calc(100% - 64px));
+    margin: 28px auto 0;
+    padding: 0;
+    position: relative;
+    z-index: 3;
+}
+
+.video-card {
+    width: 100%;
+    max-width: 1280px;
+    margin: 0 auto;
+    background: #000000;
+    border-radius: 26px;
+    overflow: hidden;
+    box-shadow: 0 25px 75px rgba(0, 0, 0, 0.55);
+    border: 1px solid rgba(255, 255, 255, 0.10);
+}
+
+/* Altura controlada para que NO abarque toda la pantalla */
+#videoPlayer {
+    width: 100%;
+    height: auto;
+    max-height: 520px;
+    aspect-ratio: 16 / 6.5;
+    display: block;
+    object-fit: cover;
+    background: #000000;
+}
+
+.player-progress-note {
+    padding: 14px 20px;
+    font-size: 14px;
+    color: #d1d5db;
+    background: rgba(255, 255, 255, 0.05);
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.player-progress-note.ok {
+    color: #86efac;
+}
+
+.player-progress-note.error {
+    color: #ffb4b8;
+}
+
+/* =========================================================
+   CONTROLES
+========================================================= */
+
+.controles-personalizados {
+    background: #000000;
+    padding: 18px 22px 22px;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.controles-progreso {
+    margin-bottom: 18px;
+}
+
+#barraProgreso {
+    width: 100%;
+    cursor: pointer;
+}
+
+.controles-botones {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 16px;
+    flex-wrap: wrap;
+}
+
+.controles-izquierda,
+.controles-derecha {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.btn-control {
+    background: rgba(255, 255, 255, 0.12);
+    color: white;
+    border: none;
+    padding: 11px 16px;
+    border-radius: 999px;
+    font-weight: 800;
+    cursor: pointer;
+    transition: 0.2s ease;
+}
+
+.btn-control:hover {
+    background: rgba(255, 255, 255, 0.22);
+}
+
+.control-volumen {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: white;
+}
+
+.control-volumen input {
+    width: 150px;
+}
+
+/* =========================================================
+   RECOMENDACIONES
+========================================================= */
+
+.recomendaciones-netflix {
+    width: min(1320px, calc(100% - 64px));
+    margin: 36px auto 70px;
+    padding: 0;
+}
+
+.recomendaciones-netflix h2 {
+    font-size: 24px;
+    margin-bottom: 18px;
+}
+
+.slider-peliculas {
+    display: flex;
+    gap: 14px;
+    overflow-x: auto;
+    padding-bottom: 14px;
+    scroll-behavior: smooth;
+}
+
+.slider-peliculas::-webkit-scrollbar {
+    height: 8px;
+}
+
+.slider-peliculas::-webkit-scrollbar-thumb {
+    background: #444;
+    border-radius: 999px;
+}
+
+.pelicula-card {
+    min-width: 180px;
+    max-width: 180px;
+    text-decoration: none;
+    color: white;
+    transition: transform 0.25s ease;
+}
+
+.pelicula-card:hover {
+    transform: scale(1.06);
+}
+
+.pelicula-card img {
+    width: 180px;
+    height: 260px;
+    object-fit: cover;
+    border-radius: 10px;
+    display: block;
+    background: #222;
+}
+
+.pelicula-card p {
+    margin-top: 8px;
+    text-align: center;
+    font-size: 14px;
+    font-weight: 700;
+    color: #f3f4f6;
+}
+
+.empty-recomendacion {
+    color: #9ca3af;
+    padding: 10px 0;
+}
+
+/* =========================================================
+   RESPONSIVE
+========================================================= */
+
+@media (max-width: 1100px) {
+    .hero-player,
+    .video-player-section,
+    .recomendaciones-netflix {
+        width: min(100% - 40px, 1000px);
     }
 
-    video,
-    .video-player {
-        max-height: 76vh;
+    .hero-content h1 {
+        font-size: 36px;
+    }
+
+    #videoPlayer {
+        max-height: 430px;
+        aspect-ratio: 16 / 7;
     }
 }
 
-@media (max-width: 900px) {
-    .player-page,
-    .reproductor-page,
-    .player-container,
-    .video-container {
-        padding-left: 20px;
-        padding-right: 20px;
+@media (max-width: 800px) {
+    .hero-player {
+        min-height: 300px;
+        padding: 34px 28px;
+        margin-top: 22px;
     }
 
-    video,
-    .video-player {
-        width: 100%;
-        max-height: 62vh;
+    .hero-content h1 {
+        font-size: 30px;
     }
 
-    .player-info,
-    .reproductor-info {
-        text-align: center;
+    .hero-description {
+        font-size: 14px;
     }
 
-    .player-actions,
-    .reproductor-actions {
+    .video-player-section {
+        margin-top: 22px;
+    }
+
+    #videoPlayer {
+        max-height: 360px;
+        aspect-ratio: 16 / 8;
+    }
+
+    .controles-botones {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .controles-izquierda,
+    .controles-derecha {
         justify-content: center;
-        flex-wrap: wrap;
+    }
+
+    .control-volumen {
+        justify-content: center;
     }
 }
 
 @media (max-width: 600px) {
-    .player-page,
-    .reproductor-page,
-    .player-container,
-    .video-container {
-        padding-left: 14px;
-        padding-right: 14px;
+    .hero-player,
+    .video-player-section,
+    .recomendaciones-netflix {
+        width: calc(100% - 28px);
     }
 
-    video,
-    .video-player {
-        width: 100%;
-        max-height: 48vh;
-        border-radius: 16px;
+    .hero-player {
+        min-height: 260px;
+        padding: 28px 20px;
+        border-radius: 20px;
     }
 
-    .player-info h1,
-    .reproductor-info h1 {
+    .hero-content h1 {
         font-size: 26px;
     }
 
-    .player-info p,
-    .reproductor-info p {
-        font-size: 14px;
+    .hero-meta {
+        font-size: 13px;
     }
 
-    .player-actions button,
-    .reproductor-actions button,
-    .btn {
+    .hero-description {
+        font-size: 13px;
+        line-height: 1.45;
+    }
+
+    .hero-buttons {
+        flex-direction: column;
+    }
+
+    .hero-buttons .btn,
+    .hero-buttons .btn-dark {
         width: 100%;
     }
+
+    .video-card {
+        border-radius: 18px;
+    }
+
+    #videoPlayer {
+        max-height: 280px;
+        aspect-ratio: 16 / 9;
+    }
+
+    .btn-control {
+        width: 100%;
+    }
+
+    .control-volumen {
+        width: 100%;
+    }
+
+    .recomendaciones-netflix h2 {
+        font-size: 20px;
+    }
+
+    .pelicula-card {
+        min-width: 135px;
+        max-width: 135px;
+    }
+
+    .pelicula-card img {
+        width: 135px;
+        height: 195px;
+    }
+}
+
+/* =========================================================
+   PANTALLA COMPLETA REAL DEL REPRODUCTOR
+========================================================= */
+
+#videoContenedor:fullscreen {
+    width: 100vw !important;
+    height: 100vh !important;
+    max-width: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border-radius: 0 !important;
+    border: none !important;
+    background: #000000 !important;
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: space-between !important;
+    overflow: hidden !important;
+}
+
+#videoContenedor:fullscreen #videoPlayer {
+    width: 100vw !important;
+    height: calc(100vh - 145px) !important;
+    max-height: none !important;
+    aspect-ratio: auto !important;
+    object-fit: contain !important;
+    background: #000000 !important;
+    border-radius: 0 !important;
+}
+
+#videoContenedor:fullscreen .player-progress-note {
+    display: none !important;
+}
+
+#videoContenedor:fullscreen .controles-personalizados {
+    width: 100%;
+    min-height: 145px;
+    padding: 22px 28px 26px;
+    background: rgba(0, 0, 0, 0.96) !important;
+    border-top: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+/* Compatibilidad con navegadores WebKit */
+#videoContenedor:-webkit-full-screen {
+    width: 100vw !important;
+    height: 100vh !important;
+    max-width: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border-radius: 0 !important;
+    border: none !important;
+    background: #000000 !important;
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: space-between !important;
+    overflow: hidden !important;
+}
+
+#videoContenedor:-webkit-full-screen #videoPlayer {
+    width: 100vw !important;
+    height: calc(100vh - 145px) !important;
+    max-height: none !important;
+    aspect-ratio: auto !important;
+    object-fit: contain !important;
+    background: #000000 !important;
+    border-radius: 0 !important;
+}
+
+#videoContenedor:-webkit-full-screen .player-progress-note {
+    display: none !important;
+}
+
+#videoContenedor:-webkit-full-screen .controles-personalizados {
+    width: 100%;
+    min-height: 145px;
+    padding: 22px 28px 26px;
+    background: rgba(0, 0, 0, 0.96) !important;
+    border-top: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+/* =========================================================
+   CONTROLES TIPO NETFLIX: OCULTAR Y MOSTRAR AL TOCAR
+========================================================= */
+
+.video-card {
+    position: relative;
+}
+
+.controles-personalizados {
+    transition: opacity 0.35s ease, transform 0.35s ease;
+}
+
+.video-card.controles-ocultos .controles-personalizados {
+    opacity: 0;
+    pointer-events: none;
+    transform: translateY(25px);
+}
+
+.video-card.controles-ocultos .player-progress-note {
+    opacity: 0;
+    pointer-events: none;
+}
+
+/* En pantalla completa los controles quedan flotando abajo */
+#videoContenedor:fullscreen {
+    position: relative !important;
+}
+
+#videoContenedor:fullscreen .controles-personalizados {
+    position: absolute !important;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 20;
+    background: linear-gradient(to top, rgba(0, 0, 0, 0.96), rgba(0, 0, 0, 0.70), transparent) !important;
+    padding: 55px 28px 28px !important;
+}
+
+#videoContenedor:fullscreen #videoPlayer {
+    width: 100vw !important;
+    height: 100vh !important;
+    max-height: none !important;
+    object-fit: contain !important;
+    background: #000 !important;
+}
+
+#videoContenedor:fullscreen .player-progress-note {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 145px;
+    z-index: 19;
+    background: rgba(0, 0, 0, 0.75);
+}
+
+/* Compatibilidad Chrome / Edge */
+#videoContenedor:-webkit-full-screen {
+    position: relative !important;
+}
+
+#videoContenedor:-webkit-full-screen .controles-personalizados {
+    position: absolute !important;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 20;
+    background: linear-gradient(to top, rgba(0, 0, 0, 0.96), rgba(0, 0, 0, 0.70), transparent) !important;
+    padding: 55px 28px 28px !important;
+}
+
+#videoContenedor:-webkit-full-screen #videoPlayer {
+    width: 100vw !important;
+    height: 100vh !important;
+    max-height: none !important;
+    object-fit: contain !important;
+    background: #000 !important;
+}
+
+#videoContenedor:-webkit-full-screen .player-progress-note {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 145px;
+    z-index: 19;
+    background: rgba(0, 0, 0, 0.75);
 }
