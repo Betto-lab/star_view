@@ -47,16 +47,24 @@ function generarCodigoVerificacion() {
     return Math.floor(100000 + Math.random() * 900000).toString();
 }
 
-async function enviarCorreoVerificacion(correo, nombre, codigo) {
+async function enviarCorreoVerificacion(correo, nombre, codigo, tipo = "registro") {
     // Pega aquí la URL que te acaba de dar Google Apps Script
     const urlGoogleScript = "https://script.google.com/macros/s/AKfycbwoBuUvkjHGh0LWHiOJvZfg9HtkalQQNYeRLefQVPVYSXzoOxY_jzRGn342e-ox3NWO/exec";
 
     try {
-        await axios.post(urlGoogleScript, JSON.stringify({ correo, nombre, codigo }), {
-            headers: { "Content-Type": "text/plain" } // Usamos text/plain para evitar redirecciones de Google
+        console.log(`[CORREO] Intentando enviar código ${codigo} a: ${correo} (Modo: ${tipo})`);
+        
+        // Usamos fetch nativo que es más compatible con las redirecciones de Google Apps Script
+        const respuesta = await fetch(urlGoogleScript, {
+            method: "POST",
+            headers: { "Content-Type": "text/plain" },
+            body: JSON.stringify({ correo, nombre, codigo, tipo }),
+            redirect: "follow"
         });
+
+        console.log(`[CORREO] Respuesta de Google HTTP: ${respuesta.status}`);
     } catch (error) {
-        console.log("Error con el Script de Google:", error.message);
+        console.log("[CORREO ERROR] Falló la conexión con Google Script:", error.message);
         throw new Error("Fallo en la API de correos");
     }
 }
@@ -72,7 +80,51 @@ app.get("/", (req, res) => {
 /* =========================
    REGISTRO Y LOGIN
 ========================= */
+const recuperacionesCuenta = new Map();
 
+// 1. Enviar código para recuperar cuenta principal
+app.post("/recuperar-cuenta/iniciar", (req, res) => {
+    const { correo } = req.body;
+    
+    conexion.query("SELECT id, nombre FROM usuarios WHERE correo = ?", [correo], async (error, resultados) => {
+        if (error) {
+            return res.json({ ok: false, mensaje: "Error del servidor al buscar el correo." });
+        }
+        
+        // AHORA SÍ VALIDA SI EL CORREO EXISTE
+        if (resultados.length === 0) {
+            return res.json({ ok: false, mensaje: "Este correo no está registrado. Verifica si está bien escrito." });
+        }
+        
+        const codigo = generarCodigoVerificacion();
+        recuperacionesCuenta.set(correo, { codigo, creado: Date.now() });
+
+        try {
+            // El parámetro extra "cuenta" es para que Google Apps Script sepa qué correo enviar
+            await enviarCorreoVerificacion(correo, resultados[0].nombre, codigo, "cuenta");
+            res.json({ ok: true, mensaje: "Código enviado exitosamente a tu correo." });
+        } catch (e) {
+            res.json({ ok: false, mensaje: "El servidor falló al intentar enviar el correo." });
+        }
+    });
+});
+
+// 2. Confirmar código y cambiar la contraseña de la cuenta
+app.post("/recuperar-cuenta/confirmar", async (req, res) => {
+    const { correo, codigo, nueva_password } = req.body;
+    const peticion = recuperacionesCuenta.get(correo);
+
+    if (!peticion || peticion.codigo !== codigo || (Date.now() - peticion.creado > 10 * 60 * 1000)) {
+        return res.json({ ok: false, mensaje: "Código inválido o expirado" });
+    }
+
+    const passwordHash = await bcrypt.hash(nueva_password, 10);
+    conexion.query("UPDATE usuarios SET password = ? WHERE correo = ?", [passwordHash, correo], (error) => {
+        if (error) return res.json({ ok: false, mensaje: "Error al actualizar contraseña" });
+        recuperacionesCuenta.delete(correo);
+        res.json({ ok: true, mensaje: "Contraseña actualizada correctamente" });
+    });
+});
 app.post("/registro", async (req, res) => {
     const { nombre, correo, password } = req.body;
 
@@ -137,7 +189,7 @@ app.post("/registro", async (req, res) => {
                 });
 
                 try {
-                    await enviarCorreoVerificacion(correo, nombre, codigo);
+                    await enviarCorreoVerificacion(correo, nombre, codigo, "perfil");
 
                     res.json({
                         ok: true,
@@ -438,7 +490,70 @@ app.post("/perfiles", (req, res) => {
         }
     );
 });
+app.post("/perfiles/verificar", (req, res) => {
+    const { usuario_id, perfil_id, password_perfil } = req.body;
 
+    if (!usuario_id || !perfil_id || !password_perfil) {
+        return res.json({
+            ok: false,
+            mensaje: "Ingresa la contraseña del perfil"
+        });
+    }
+
+    conexion.query(
+        `SELECT id, nombre, password_perfil
+         FROM perfiles
+         WHERE id = ? AND usuario_id = ?`,
+        [perfil_id, usuario_id],
+        async (error, resultados) => {
+            if (error) {
+                console.log(error);
+                return res.json({
+                    ok: false,
+                    mensaje: "Error al verificar perfil"
+                });
+            }
+
+            if (resultados.length === 0) {
+                return res.json({
+                    ok: false,
+                    mensaje: "Perfil no encontrado"
+                });
+            }
+
+            const perfil = resultados[0];
+
+            if (!perfil.password_perfil) {
+                return res.json({
+                    ok: true,
+                    mensaje: "Perfil sin contraseña configurada",
+                    perfil: {
+                        id: perfil.id,
+                        nombre: perfil.nombre
+                    }
+                });
+            }
+
+            const passwordValida = await bcrypt.compare(password_perfil, perfil.password_perfil);
+
+            if (!passwordValida) {
+                return res.json({
+                    ok: false,
+                    mensaje: "Contraseña de perfil incorrecta"
+                });
+            }
+
+            res.json({
+                ok: true,
+                mensaje: "Perfil verificado correctamente",
+                perfil: {
+                    id: perfil.id,
+                    nombre: perfil.nombre
+                }
+            });
+        }
+    );
+});
 app.post("/perfiles/recuperar-iniciar", (req, res) => {
     const { usuario_id, perfil_id } = req.body;
 
@@ -487,10 +602,12 @@ app.post("/perfiles/recuperar-iniciar", (req, res) => {
             });
 
             try {
+                // AQUÍ LE AGREGAMOS EL "perfil" AL FINAL DE LA FUNCIÓN
                 await enviarCorreoVerificacion(
                     datos.usuario_correo,
                     datos.usuario_nombre,
-                    codigo
+                    codigo,
+                    "perfil"
                 );
 
                 res.json({

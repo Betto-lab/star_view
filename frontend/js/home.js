@@ -101,7 +101,7 @@ function cardContenido(item, opciones = {}) {
 
     return `
         <article class="card">
-            <img src="${normalizarImagen(item.imagen)}" class="poster" alt="${escapeHTML(item.titulo)}">
+            <img src="${normalizarImagen(item.imagen)}" class="poster" alt="${escapeHTML(item.titulo)}" style="cursor: pointer;" onclick="verAhora(${item.id})">
 
             <div class="card-info">
                 <h3>${escapeHTML(item.titulo)}</h3>
@@ -120,7 +120,7 @@ function cardContenido(item, opciones = {}) {
 function cardTMDB(item) {
     return `
         <article class="card">
-            <img src="${normalizarImagen(item.imagen)}" class="poster" alt="${escapeHTML(item.titulo)}">
+            <img src="${normalizarImagen(item.imagen)}" class="poster" alt="${escapeHTML(item.titulo)}" style="cursor: pointer;" onclick="verAhoraTMDB(${item.tmdb_id})">
 
             <div class="card-info">
                 <h3>${escapeHTML(item.titulo)}</h3>

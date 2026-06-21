@@ -19,16 +19,26 @@ function mostrarMensajeRecuperacion(texto, tipo = "error") {
 }
 
 function abrirRecuperacion() {
-    const correoLogin = document.getElementById("correo").value.trim();
+    const inputCorreoLogin = document.getElementById("correo");
+    const correoLogin = inputCorreoLogin ? inputCorreoLogin.value.trim() : "";
     const modal = document.getElementById("modalRecuperacion");
 
-    document.getElementById("correoRecuperar").value = correoLogin;
-    document.getElementById("nuevaPassword").value = "";
-    document.getElementById("confirmarPassword").value = "";
+    const inputCorreoRecuperar = document.getElementById("correoRecuperar");
+    if (inputCorreoRecuperar) inputCorreoRecuperar.value = correoLogin;
+    
+    const inputNuevaPassword = document.getElementById("nuevaPassword");
+    if (inputNuevaPassword) inputNuevaPassword.value = "";
+    
+    const inputCodigo = document.getElementById("codigoCuenta");
+    if (inputCodigo) inputCodigo.value = "";
+
+    // SE ELIMINÓ LA LLAMADA A "confirmarPassword" PORQUE ESE CAMPO NO EXISTE EN EL HTML
 
     mostrarMensajeRecuperacion("");
 
-    modal.classList.add("show");
+    if (modal) {
+        modal.classList.add("show");
+    }
 }
 
 function cerrarRecuperacion() {
@@ -48,6 +58,14 @@ async function iniciarSesion() {
         return;
     }
 
+    const btnLogin = document.querySelector(".btn-full");
+    const textoOriginal = btnLogin ? btnLogin.innerText : "Ingresar";
+    
+    if (btnLogin) {
+        btnLogin.innerText = "Cargando...";
+        btnLogin.disabled = true;
+    }
+
     try {
         const respuesta = await fetch(`${API_BASE}/login`, {
             method: "POST",
@@ -61,6 +79,11 @@ async function iniciarSesion() {
         });
 
         const datos = await respuesta.json();
+
+        if (btnLogin) {
+            btnLogin.innerText = textoOriginal;
+            btnLogin.disabled = false;
+        }
 
         if (!datos.ok && datos.mensaje !== "Inicio de sesión correcto") {
             mostrarMensaje(datos.mensaje || "Correo o contraseña incorrectos");
@@ -104,59 +127,86 @@ async function iniciarSesion() {
 
     } catch (error) {
         console.log(error);
+        if (btnLogin) {
+            btnLogin.innerText = textoOriginal;
+            btnLogin.disabled = false;
+        }
         mostrarMensaje("No se pudo conectar con el servidor");
     }
 }
 
-async function restablecerPassword() {
+async function pedirCodigoCuenta() {
     const correo = document.getElementById("correoRecuperar").value.trim();
-    const password = document.getElementById("nuevaPassword").value.trim();
-    const confirmar = document.getElementById("confirmarPassword").value.trim();
+    if (!correo) return mostrarMensajeRecuperacion("Ingresa tu correo primero");
 
-    if (!correo || !password || !confirmar) {
-        mostrarMensajeRecuperacion("Completa todos los campos");
-        return;
-    }
-
-    if (password.length < 6) {
-        mostrarMensajeRecuperacion("La contraseña debe tener mínimo 6 caracteres");
-        return;
-    }
-
-    if (password !== confirmar) {
-        mostrarMensajeRecuperacion("Las contraseñas no coinciden");
-        return;
+    const boton = document.getElementById("btnPedirCodigo");
+    const textoOriginal = boton ? boton.innerText : "Enviar código al correo";
+    
+    if (boton) { 
+        boton.innerText = "Enviando..."; 
+        boton.disabled = true; 
     }
 
     try {
-        const respuesta = await fetch(`${API_BASE}/recuperar-password`, {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json"
-            },
-            body: JSON.stringify({
-                correo,
-                password
-            })
+        const res = await fetch(`${API_BASE}/recuperar-cuenta/iniciar`, {
+            method: "POST", 
+            headers: { "Content-Type": "application/json" }, 
+            body: JSON.stringify({ correo })
         });
-
-        const datos = await respuesta.json();
-
+        const datos = await res.json();
         mostrarMensajeRecuperacion(datos.mensaje, datos.ok ? "ok" : "error");
+    } catch(e) { 
+        mostrarMensajeRecuperacion("Error de conexión"); 
+    }
+    
+    if (boton) { 
+        boton.innerText = textoOriginal; 
+        boton.disabled = false; 
+    }
+}
 
-        if (datos.ok) {
-            document.getElementById("correo").value = correo;
-            document.getElementById("password").value = "";
+async function restablecerPasswordCuenta() {
+    const correo = document.getElementById("correoRecuperar").value.trim();
+    const codigo = document.getElementById("codigoCuenta") ? document.getElementById("codigoCuenta").value.trim() : "";
+    const nueva_password = document.getElementById("nuevaPassword").value.trim();
 
-            setTimeout(() => {
-                cerrarRecuperacion();
-                mostrarMensaje("Contraseña actualizada. Ingresa con tu nueva contraseña.", "ok");
-            }, 900);
+    if (!correo || !codigo || !nueva_password) {
+        return mostrarMensajeRecuperacion("Completa todos los campos, incluyendo el código numérico.");
+    }
+
+    const btnConfirma = document.querySelector("#modalRecuperacion .btn-primary");
+    const textoOriginal = btnConfirma ? btnConfirma.innerText : "Actualizar contraseña";
+    
+    if (btnConfirma) {
+        btnConfirma.innerText = "Cargando...";
+        btnConfirma.disabled = true;
+    }
+
+    try {
+        const res = await fetch(`${API_BASE}/recuperar-cuenta/confirmar`, {
+            method: "POST", 
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ correo, codigo, nueva_password })
+        });
+        const datos = await res.json();
+        
+        if (btnConfirma) {
+            btnConfirma.innerText = textoOriginal;
+            btnConfirma.disabled = false;
         }
 
-    } catch (error) {
-        console.log(error);
-        mostrarMensajeRecuperacion("No se pudo conectar con el servidor");
+        if (datos.ok) {
+            cerrarRecuperacion();
+            mostrarMensaje("Contraseña actualizada. Ya puedes iniciar sesión.", "ok");
+        } else {
+            mostrarMensajeRecuperacion(datos.mensaje);
+        }
+    } catch(e) { 
+        if (btnConfirma) {
+            btnConfirma.innerText = textoOriginal;
+            btnConfirma.disabled = false;
+        }
+        mostrarMensajeRecuperacion("Error del servidor"); 
     }
 }
 
@@ -166,7 +216,7 @@ document.addEventListener("keydown", (event) => {
         const modalAbierto = modal && modal.classList.contains("show");
 
         if (modalAbierto) {
-            restablecerPassword();
+            restablecerPasswordCuenta(); // CORREGIDO: Antes decía restablecerPassword()
         } else {
             iniciarSesion();
         }

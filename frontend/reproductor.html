@@ -10,7 +10,7 @@
 <body class="player-body">
 
 <header class="topbar app-topbar netflix-topbar">
-    <div class="brand">STAR<span>VIEW</span></div>
+    <a href="home.html" class="brand" style="text-decoration: none;">STAR<span>VIEW</span></a>
 
     <nav class="nav">
         <a href="home.html">Inicio</a>
@@ -21,7 +21,7 @@
 
 <main class="netflix-player-page">
 
-    <section class="hero-player" id="heroPlayer">
+    <section class="hero-player" id="heroPlayer" style="cursor: pointer;" onclick="reproducirVideo()">
         <div class="hero-overlay"></div>
 
         <div class="hero-content">
@@ -39,43 +39,53 @@
             </p>
 
             <div class="hero-buttons">
-                <button class="btn btn-primary" onclick="reproducirVideo()">▶ Reproducir</button>
-                <button class="btn btn-secondary" onclick="marcarVisto()">✔ Marcar como visto</button>
-                <a href="home.html" class="btn btn-dark">← Volver al catálogo</a>
+                <button class="btn btn-primary" onclick="event.stopPropagation(); reproducirVideo();">▶ Reproducir</button>
+                <a href="home.html" class="btn btn-dark" onclick="event.stopPropagation();">← Volver al catálogo</a>
             </div>
         </div>
     </section>
 
     <section class="video-player-section">
         <div class="video-card" id="videoContenedor">
-            <video id="videoPlayer" poster="img/backdrop.jpg" preload="metadata" playsinline>
-                <source src="videos/demo.mp4" type="video/mp4">
-                Tu navegador no soporta video.
+            <video id="videoPlayer" poster="img/backdrop.jpg" preload="metadata" playsinline style="cursor: pointer;">
             </video>
-
-            <div id="mensajeProgresoVideo" class="player-progress-note">
-                Cargando progreso del video...
-            </div>
 
             <div class="controles-personalizados" id="controlesVideo">
                 <div class="controles-progreso">
+                    <div id="tiempoTooltip" class="tiempo-tooltip">0:00</div>
                     <input type="range" id="barraProgreso" value="0" min="0" max="100" step="0.1">
                 </div>
 
                 <div class="controles-botones">
                     <div class="controles-izquierda">
                         <button id="btnPlayPause" class="btn-control">▶ Play</button>
-                        <button id="btnRetroceder" class="btn-control">⏪ 10s</button>
-                        <button id="btnAdelantar" class="btn-control">30s ⏩</button>
-
+                        <button id="btnRetroceder" class="btn-control" title="Retroceder 5s">⏪ 5s</button>
+                        <button id="btnAdelantar" class="btn-control" title="Adelantar 5s">5s ⏩</button>
+                        
                         <div class="control-volumen">
                             <span>🔊</span>
-                            <input type="range" id="barraVolumen" min="0" max="1" step="0.1" value="1">
+                            <input type="range" id="barraVolumen" min="0" max="1" step="0.05" value="1">
+                        </div>
+
+                        <div class="tiempo-video">
+                            <span id="tiempoActual">0:00</span> / <span id="tiempoTotal">0:00</span>
                         </div>
                     </div>
 
-                    <div class="controles-derecha">
-                        <button id="btnPantallaCompleta" class="btn-control">⛶ Pantalla completa</button>
+                    <div class="controles-derecha" style="position: relative;">
+                        <button id="btnConfiguracion" class="btn-control" title="Audio y subtítulos">⚙️</button>
+                        <button id="btnPantallaCompleta" class="btn-control" title="Pantalla completa">⛶</button>
+
+                        <div id="menuConfiguracion" class="menu-configuracion oculto">
+                            <div class="config-seccion">
+                                <h4>Audio</h4>
+                                <ul id="listaAudio"></ul>
+                            </div>
+                            <div class="config-seccion">
+                                <h4>Subtítulos</h4>
+                                <ul id="listaSubtitulos"></ul>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
