@@ -349,9 +349,37 @@ function inicializarVideo() {
 
     btnPantallaCompleta.addEventListener("click", async () => {
         try {
-            if (!document.fullscreenElement) await contenedor.requestFullscreen();
-            else await document.exitFullscreen();
-        } catch (error) { alert(`Error: ${error.message}`); }
+            // Si NO está en pantalla completa
+            if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+                
+                // 1. Entrar a pantalla completa (compatible con todos los navegadores)
+                if (contenedor.requestFullscreen) {
+                    await contenedor.requestFullscreen();
+                } else if (contenedor.webkitRequestFullscreen) {
+                    await contenedor.webkitRequestFullscreen();
+                }
+                
+                // 2. FORZAR MODO HORIZONTAL (Landscape) EN CELULARES
+                if (screen.orientation && screen.orientation.lock) {
+                    await screen.orientation.lock("landscape").catch(e => console.log("Giro automático no soportado:", e));
+                }
+
+            } else {
+                // Si YA ESTÁ en pantalla completa, salimos
+                if (document.exitFullscreen) {
+                    await document.exitFullscreen();
+                } else if (document.webkitExitFullscreen) {
+                    await document.webkitExitFullscreen();
+                }
+                
+                // 3. Liberar la rotación del celular para que vuelva a vertical
+                if (screen.orientation && screen.orientation.unlock) {
+                    screen.orientation.unlock();
+                }
+            }
+        } catch (error) { 
+            console.log("Error de pantalla completa:", error); 
+        }
     });
 
     video.addEventListener("play", () => { btnPlayPause.innerText = "⏸ Pausa"; mostrarControlesVideo(); setTimeout(ocultarControlesVideo, 2500); });
