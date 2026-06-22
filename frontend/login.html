@@ -29,8 +29,13 @@
         <label for="password">Contraseña</label>
         <input type="password" id="password" placeholder="Tu contraseña" autocomplete="current-password">
 
-        <div class="password-tools">
-            <button type="button" class="link-button" onclick="abrirRecuperacion()">
+        <div class="password-tools" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 14px; color: #b3b3b3; font-weight: normal; margin: 0; text-transform: none;">
+                <input type="checkbox" id="mantenerSesion" checked style="width: 16px; height: 16px; margin: 0; cursor: pointer;">
+                Mantener sesión iniciada
+            </label>
+            
+            <button type="button" class="link-button" onclick="abrirRecuperacion()" style="margin: 0;">
                 ¿Olvidaste tu contraseña?
             </button>
         </div>

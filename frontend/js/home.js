@@ -150,7 +150,7 @@ function cardContenido(item, opciones = {}) {
                         ${opciones.progreso ? "Continuar" : "Ver ahora"}
                     </button>
 
-                    <button onclick="agregarMiLista(${item.id})">
+                    <button id="btn-lista-${item.id}" onclick="agregarMiLista(${item.id})">
                         + Mi Lista
                     </button>
                 </div>
@@ -295,6 +295,17 @@ async function agregarMiLista(contenido_id) {
         });
 
         const datos = await respuesta.json();
+
+        // NUEVO: Cambio visual del botón al agregar
+        if (datos.ok) {
+            const btn = document.getElementById(`btn-lista-${contenido_id}`);
+            if (btn) {
+                btn.innerText = "✓ Agregado";
+                btn.style.backgroundColor = "rgba(255, 255, 255, 0.2)";
+                btn.style.color = "white";
+                btn.disabled = true;
+            }
+        }
 
         mostrarToast(
             datos.mensaje || "Agregado a Mi Lista",

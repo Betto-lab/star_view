@@ -1551,6 +1551,74 @@ app.get("/api/recomendaciones/:genero/:id_actual", (req, res) => {
         }
     );
 });
+
+/* =========================================
+   RUTAS PARA CASOS DE PRUEBA (HU03 Y HU15)
+========================================= */
+
+// HU03-TC03: Editar un perfil existente
+app.put("/perfiles/:id", (req, res) => {
+    const { id } = req.params;
+    const { nombre, avatar, infantil } = req.body;
+    
+    conexion.query(
+        "UPDATE perfiles SET nombre = ?, avatar = ?, infantil = ? WHERE id = ?",
+        [nombre, avatar, infantil ? 1 : 0, id],
+        (error) => {
+            if (error) return res.json({ ok: false, mensaje: "Error al actualizar perfil" });
+            res.json({ ok: true, mensaje: "Perfil actualizado correctamente" });
+        }
+    );
+});
+
+// HU03-TC04: Eliminar un perfil existente
+app.delete("/perfiles/:id", (req, res) => {
+    const { id } = req.params;
+    // Eliminamos en cascada: Historial -> Mi lista -> Perfil
+    conexion.query("DELETE FROM historial WHERE perfil_id = ?", [id], () => {
+        conexion.query("DELETE FROM mi_lista WHERE perfil_id = ?", [id], () => {
+            conexion.query("DELETE FROM perfiles WHERE id = ?", [id], (error) => {
+                if (error) return res.json({ ok: false, mensaje: "Error al eliminar perfil" });
+                res.json({ ok: true, mensaje: "Perfil eliminado correctamente" });
+            });
+        });
+    });
+});
+
+// HU15: Sugerencias basadas en el género más visto del perfil
+app.get("/recomendaciones/historial/:perfil_id", (req, res) => {
+    const { perfil_id } = req.params;
+    
+    conexion.query(
+        `SELECT c.genero, COUNT(*) as vistas
+         FROM historial h
+         INNER JOIN contenido c ON h.contenido_id = c.id
+         WHERE h.perfil_id = ?
+         GROUP BY c.genero
+         ORDER BY vistas DESC
+         LIMIT 1`,
+        [perfil_id],
+        (error, resultados) => {
+            if (error || resultados.length === 0) {
+                return res.json({ ok: false, mensaje: "No hay historial suficiente" });
+            }
+
+            const generoFavorito = resultados[0].genero.split(',')[0].trim();
+
+            conexion.query(
+                `SELECT c.* FROM contenido c
+                 WHERE c.genero LIKE ? 
+                 AND c.id NOT IN (SELECT contenido_id FROM historial WHERE perfil_id = ? AND terminado = 1)
+                 LIMIT 12`,
+                [`%${generoFavorito}%`, perfil_id],
+                (err, peliculas) => {
+                    if (err) return res.json({ ok: false });
+                    res.json({ ok: true, genero: generoFavorito, recomendaciones: peliculas });
+                }
+            );
+        }
+    );
+});
 /* =========================
    SERVIDOR
 ========================= */
