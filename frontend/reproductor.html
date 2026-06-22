@@ -32,6 +32,7 @@
                 <a href="suscripcion.html">⭐ Suscripción</a>
                 <div class="dropdown-divider"></div>
                 <button onclick="cerrarSesionNav()">🚪 Cerrar sesión</button>
+                <button onclick="eliminarPerfilActual()" style="color: #ffb4b8; margin-top: 5px;">🗑️ Eliminar perfil</button>
             </div>
         </div>
     </nav>
@@ -203,7 +204,25 @@
             }
         } catch(e) { alert("Error de conexión"); }
     }
-
+async function eliminarPerfilActual() {
+        if(!confirm("¿Estás 100% seguro de eliminar ESTE perfil?\nPerderás tu Historial y Mi Lista para siempre.")) return;
+        
+        const perfil_id = localStorage.getItem("perfil_id") || sessionStorage.getItem("perfil_id");
+        try {
+            const res = await fetch(`${NAV_API_BASE}/perfiles/${perfil_id}`, { method: "DELETE" });
+            const datos = await res.json();
+            
+            if (datos.ok) {
+                localStorage.removeItem("perfil_id");
+                localStorage.removeItem("perfil_nombre");
+                sessionStorage.removeItem("perfil_id");
+                sessionStorage.removeItem("perfil_nombre");
+                window.location.href = "seleccionar-perfil.html";
+            } else {
+                alert(datos.mensaje);
+            }
+        } catch(e) { alert("Error al eliminar"); }
+    }
     document.addEventListener("DOMContentLoaded", cargarDatosTopbar);
 </script>
 </body>
