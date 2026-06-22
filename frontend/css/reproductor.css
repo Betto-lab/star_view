@@ -797,3 +797,67 @@ input[type="range"]::-webkit-slider-thumb:hover {
         font-size: 11px !important;
     }
 }
+/* ==========================================
+   ARREGLO CONTROLES DE VIDEO Y CUADRO BLANCO
+========================================== */
+/* 1. Forzar los controles en una sola línea horizontal */
+.controles-personalizados {
+    display: flex !important;
+    flex-direction: row !important;
+    flex-wrap: nowrap !important; /* No permite que se apilen */
+    justify-content: space-between !important;
+    align-items: center !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
+    padding: 8px 12px !important;
+    background: rgba(0, 0, 0, 0.75) !important;
+}
+
+.controles-izquierda, .controles-derecha {
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: center !important;
+    flex-wrap: nowrap !important;
+    gap: 10px !important;
+}
+
+/* 2. Solución al cuadro blanco gigante (Sliders) */
+input[type="range"] {
+    -webkit-appearance: none !important; /* Quita el bloque blanco de Chrome/Safari */
+    appearance: none !important;
+    background: rgba(255, 255, 255, 0.3) !important; /* Fondo sutil */
+    height: 4px !important;
+    border-radius: 2px !important;
+    outline: none !important;
+}
+
+/* Darle estilo a la bolita del slider para que sea roja y estética */
+input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none !important;
+    background: #e50914 !important;
+    height: 12px !important;
+    width: 12px !important;
+    border-radius: 50% !important;
+}
+
+/* 3. Ajustes de tamaño solo para Celulares */
+@media (max-width: 600px) {
+    /* Achicamos la barra de volumen para que quepa todo el tiempo */
+    .volumen-container input[type="range"] {
+        width: 50px !important;
+    }
+    
+    #tiempoActual, #tiempoTotal {
+        font-size: 11px !important;
+        white-space: nowrap !important;
+    }
+    
+    .btn-control {
+        font-size: 16px !important;
+        padding: 0 4px !important;
+    }
+    
+    .controles-izquierda, .controles-derecha {
+        gap: 6px !important;
+    }
+}

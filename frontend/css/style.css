@@ -2327,3 +2327,42 @@ textarea:focus{
         min-width: 210px !important;
     }
 }
+/* ==========================================
+   ALINEACIÓN PERFECTA BARRA SUPERIOR (MÓVIL Y PC)
+========================================== */
+.topbar {
+    display: flex !important;
+    justify-content: space-between !important;
+    align-items: center !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
+    padding: 10px 20px !important;
+}
+
+.nav {
+    display: flex !important;
+    flex-direction: row !important; /* Fuerza línea horizontal */
+    align-items: center !important;
+    flex-wrap: nowrap !important; /* PROHÍBE que se caigan abajo */
+    gap: 15px !important;
+}
+
+.nav-perfil {
+    display: flex !important;
+    align-items: center !important;
+    margin-left: 0 !important;
+}
+
+/* Ajuste sutil del texto para celulares muy estrechos */
+@media (max-width: 600px) {
+    .nav {
+        gap: 10px !important;
+    }
+    .nav a {
+        font-size: 13px !important;
+        white-space: nowrap !important; /* Evita que el texto se parta */
+    }
+    .topbar {
+        padding: 10px 15px !important;
+    }
+}
