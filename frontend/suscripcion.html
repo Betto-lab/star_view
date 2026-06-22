@@ -22,6 +22,7 @@
             </div>
             <div class="dropdown-menu">
                 <div style="padding: 10px 20px; font-weight: bold; border-bottom: 1px solid rgba(255,255,255,0.1); margin-bottom: 5px;" id="navNombrePerfil">Cargando...</div>
+                <button onclick="abrirEdicionPerfilActual()">✏️ Editar perfil</button>
                 <a href="seleccionar-perfil.html">👥 Cambiar de perfil</a>
                 <div class="dropdown-divider"></div>
                 <a href="planes.html">💳 Planes</a>
@@ -29,6 +30,7 @@
                 <a href="suscripcion.html">⭐ Suscripción</a>
                 <div class="dropdown-divider"></div>
                 <button onclick="cerrarSesion()">🚪 Cerrar sesión</button>
+                <button onclick="eliminarPerfilActual()" style="color: #ffb4b8; margin-top: 5px;">🗑️ Eliminar perfil</button>
             </div>
         </div>
     </nav>
@@ -44,23 +46,100 @@
 
 <script src="js/suscripcion.js"></script>
 <script>
-    // Cargar foto y nombre en la barra superior
+    const API_BASE = window.location.origin;
+
+    function cerrarSesion() {
+        localStorage.clear(); sessionStorage.clear();
+        window.location.href = "index.html";
+    }
+
     document.addEventListener("DOMContentLoaded", async () => {
         const usuario_id = localStorage.getItem("usuario_id") || sessionStorage.getItem("usuario_id");
         const perfil_id = localStorage.getItem("perfil_id") || sessionStorage.getItem("perfil_id");
         if (!usuario_id || !perfil_id) return;
-
         try {
-            const res = await fetch(`${window.location.origin}/perfiles/${usuario_id}`);
+            const res = await fetch(`${API_BASE}/perfiles/${usuario_id}`);
             const perfiles = await res.json();
             const actual = perfiles.find(p => String(p.id) === String(perfil_id));
             if (actual) {
                 const img = actual.avatar.includes('.') ? actual.avatar : actual.avatar + '.jpg';
                 document.getElementById("navAvatar").src = `img/${img}`;
                 document.getElementById("navNombrePerfil").innerText = actual.nombre;
+                window.perfilActualData = actual;
             }
         } catch(e) {}
     });
+
+    function abrirEdicionPerfilActual() {
+        if (!window.perfilActualData) return;
+        document.getElementById("editNombrePerfil").value = window.perfilActualData.nombre;
+        const av = window.perfilActualData.avatar;
+        document.getElementById("editAvatarPerfil").value = av.includes('.') ? av : av + '.jpg';
+        document.getElementById("editInfantilPerfil").checked = (Number(window.perfilActualData.infantil) === 1);
+        document.getElementById("modalEditarPerfil").classList.add("show");
+    }
+
+    async function guardarEdicionPerfilActual() {
+        const perfil_id = localStorage.getItem("perfil_id") || sessionStorage.getItem("perfil_id");
+        const nombre = document.getElementById("editNombrePerfil").value.trim();
+        const avatar = document.getElementById("editAvatarPerfil").value;
+        const infantil = document.getElementById("editInfantilPerfil").checked;
+        if (!nombre) return alert("El nombre es obligatorio");
+
+        try {
+            const res = await fetch(`${API_BASE}/perfiles/${perfil_id}`, {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ nombre, avatar, infantil })
+            });
+            const datos = await res.json();
+            if (datos.ok) {
+                if (localStorage.getItem("perfil_nombre")) {
+                    localStorage.setItem("perfil_nombre", nombre);
+                    localStorage.setItem("perfil_infantil", infantil ? "1" : "0");
+                } else {
+                    sessionStorage.setItem("perfil_nombre", nombre);
+                    sessionStorage.setItem("perfil_infantil", infantil ? "1" : "0");
+                }
+                window.location.reload(); 
+            } else { alert(datos.mensaje); }
+        } catch(e) { alert("Error de conexión"); }
+    }
+
+    async function eliminarPerfilActual() {
+        if(!confirm("¿Seguro de eliminar este perfil?")) return;
+        const perfil_id = localStorage.getItem("perfil_id") || sessionStorage.getItem("perfil_id");
+        try {
+            const res = await fetch(`${API_BASE}/perfiles/${perfil_id}`, { method: "DELETE" });
+            if ((await res.json()).ok) {
+                localStorage.removeItem("perfil_id"); localStorage.removeItem("perfil_nombre");
+                sessionStorage.removeItem("perfil_id"); sessionStorage.removeItem("perfil_nombre");
+                window.location.href = "seleccionar-perfil.html";
+            }
+        } catch(e) {}
+    }
 </script>
+<div id="modalEditarPerfil" class="modal-overlay">
+    <section class="modal-card">
+        <h2>Editar perfil</h2>
+        <label>Nombre</label>
+        <input type="text" id="editNombrePerfil">
+        <label>Color de Avatar</label>
+        <select id="editAvatarPerfil" style="margin-bottom: 15px; width: 100%; padding: 12px; background: rgba(255,255,255,0.1); color: white; border: 1px solid rgba(255,255,255,0.2); border-radius: 8px;">
+            <option value="Red.jpg" style="color: black;">Rojo</option>
+            <option value="Blue.jpg" style="color: black;">Azul</option>
+            <option value="Green.jpg" style="color: black;">Verde</option>
+            <option value="Yellow.jpg" style="color: black;">Amarillo</option>
+            <option value="Pink.jpg" style="color: black;">Rosa</option>
+        </select>
+        <label class="checkbox-line" style="margin-bottom: 20px;">
+            <input type="checkbox" id="editInfantilPerfil"> Perfil infantil
+        </label>
+        <div class="modal-actions">
+            <button class="btn btn-secondary" onclick="document.getElementById('modalEditarPerfil').classList.remove('show')">Cancelar</button>
+            <button class="btn btn-primary" onclick="guardarEdicionPerfilActual()">Guardar</button>
+        </div>
+    </section>
+</div>
 </body>
 </html>
