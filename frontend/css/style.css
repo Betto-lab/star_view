@@ -2366,3 +2366,41 @@ textarea:focus{
         padding: 10px 15px !important;
     }
 }
+/* ==========================================
+   ALINEACIÓN PERFECTA BARRA SUPERIOR (CELULAR)
+========================================== */
+@media (max-width: 600px) {
+    /* Forzamos que la barra completa se mantenga en una fila */
+    .app-topbar {
+        display: flex !important;
+        flex-direction: row !important;
+        justify-content: space-between !important;
+        align-items: center !important;
+        padding: 10px 15px !important;
+        flex-wrap: nowrap !important;
+    }
+
+    /* Reducimos un poco el logo para que quepa todo */
+    .brand {
+        font-size: 18px !important;
+    }
+
+    /* Mantenemos el menú en fila y reducimos el texto */
+    .nav {
+        display: flex !important;
+        flex-direction: row !important;
+        align-items: center !important;
+        flex-wrap: nowrap !important;
+        gap: 8px !important;
+    }
+
+    .nav a {
+        font-size: 12px !important;
+        padding: 5px !important;
+        white-space: nowrap !important; /* Prohíbe que el texto se parta en dos líneas */
+    }
+
+    .nav-perfil {
+        margin-left: 0 !important;
+    }
+}

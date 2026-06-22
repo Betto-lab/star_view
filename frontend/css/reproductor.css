@@ -798,66 +798,53 @@ input[type="range"]::-webkit-slider-thumb:hover {
     }
 }
 /* ==========================================
-   ARREGLO CONTROLES DE VIDEO Y CUADRO BLANCO
+   REPRODUCTOR EN CELULARES (DISEÑO SEGURO)
 ========================================== */
-/* 1. Forzar los controles en una sola línea horizontal */
-.controles-personalizados {
-    display: flex !important;
-    flex-direction: row !important;
-    flex-wrap: nowrap !important; /* No permite que se apilen */
-    justify-content: space-between !important;
-    align-items: center !important;
-    width: 100% !important;
-    box-sizing: border-box !important;
-    padding: 8px 12px !important;
-    background: rgba(0, 0, 0, 0.75) !important;
-}
-
-.controles-izquierda, .controles-derecha {
-    display: flex !important;
-    flex-direction: row !important;
-    align-items: center !important;
-    flex-wrap: nowrap !important;
-    gap: 10px !important;
-}
-
-/* 2. Solución al cuadro blanco gigante (Sliders) */
-input[type="range"] {
-    -webkit-appearance: none !important; /* Quita el bloque blanco de Chrome/Safari */
-    appearance: none !important;
-    background: rgba(255, 255, 255, 0.3) !important; /* Fondo sutil */
-    height: 4px !important;
-    border-radius: 2px !important;
-    outline: none !important;
-}
-
-/* Darle estilo a la bolita del slider para que sea roja y estética */
-input[type="range"]::-webkit-slider-thumb {
-    -webkit-appearance: none !important;
-    background: #e50914 !important;
-    height: 12px !important;
-    width: 12px !important;
-    border-radius: 50% !important;
-}
-
-/* 3. Ajustes de tamaño solo para Celulares */
 @media (max-width: 600px) {
-    /* Achicamos la barra de volumen para que quepa todo el tiempo */
-    .volumen-container input[type="range"] {
-        width: 50px !important;
+    /* Reducimos el padding general de los controles */
+    .controles-personalizados {
+        padding: 10px !important;
+        gap: 8px !important;
     }
-    
-    #tiempoActual, #tiempoTotal {
-        font-size: 11px !important;
+
+    /* Forzamos los botones a mantenerse en fila sin amontonarse */
+    .controles-botones {
+        flex-direction: row !important;
+        flex-wrap: nowrap !important;
+        gap: 5px !important;
+    }
+
+    .controles-izquierda, .controles-derecha {
+        gap: 5px !important;
+        flex-wrap: nowrap !important;
+    }
+
+    /* Achicamos los botones y el texto del tiempo */
+    .btn-control {
+        font-size: 12px !important;
+        padding: 5px !important;
+    }
+
+    .tiempo-video {
+        font-size: 10px !important;
+        margin-left: 5px !important;
         white-space: nowrap !important;
     }
-    
-    .btn-control {
-        font-size: 16px !important;
-        padding: 0 4px !important;
+
+    /* Achicamos la barra de volumen para que todo quepa */
+    #barraVolumen {
+        width: 45px !important;
     }
-    
-    .controles-izquierda, .controles-derecha {
-        gap: 6px !important;
-    }
+}
+
+/* Solución al cuadro blanco (iOS/Android) sin romper el Javascript */
+input[type="range"] {
+    -webkit-appearance: none;
+    background: transparent; /* Deja que el JS ponga el color rojo */
+}
+
+input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    background: transparent;
 }
