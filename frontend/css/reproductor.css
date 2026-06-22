@@ -762,3 +762,38 @@ input[type="range"]::-webkit-slider-thumb:hover {
     font-size: 18px;
     font-family: Arial, sans-serif;
 }
+/* ==========================================
+   REPRODUCTOR EN CELULARES
+========================================== */
+@media (max-width: 600px) {
+    .hero-player {
+        padding: 20px !important;
+        min-height: 180px !important;
+        margin-top: 10px !important;
+    }
+    .hero-content h1 {
+        font-size: 24px !important;
+        margin-bottom: 10px !important;
+    }
+    .video-card {
+        border-radius: 12px !important;
+    }
+    #videoPlayer {
+        max-height: 240px !important;
+        aspect-ratio: 16/9 !important;
+        background: #000 !important; /* Fondo negro obligatorio */
+    }
+    .controles-personalizados {
+        padding: 10px 10px 5px !important;
+    }
+    .controles-izquierda, .controles-derecha {
+        gap: 8px !important;
+    }
+    .btn-control {
+        padding: 5px !important;
+        font-size: 13px !important;
+    }
+    #tiempoActual, #tiempoTotal {
+        font-size: 11px !important;
+    }
+}

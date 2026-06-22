@@ -2267,3 +2267,63 @@ textarea:focus{
     color: #fff;
     border-color: #fff;
 }
+/* ==========================================
+   SOLUCIÓN DEFINITIVA PARA CELULARES
+========================================== */
+@media (max-width: 600px) {
+    /* 1. Reducir los textos gigantes */
+    .landing-content h1,
+    .banner-content h1,
+    .perfiles-section h1 {
+        font-size: 32px !important;
+        line-height: 1.1 !important;
+    }
+
+    /* 2. Botones de 100% de ancho para no verse aplastados */
+    .hero-actions {
+        flex-direction: column !important;
+        width: 100% !important;
+    }
+    .hero-actions .btn {
+        width: 100% !important;
+        margin-bottom: 10px !important;
+    }
+
+    /* 3. Perfiles y botón "+" proporcionados */
+    .perfiles-container {
+        gap: 15px !important;
+    }
+    .perfil-card {
+        padding: 15px 10px !important;
+        width: 110px !important; /* Tarjeta más angosta */
+    }
+    .perfil-avatar, .avatar-circle {
+        width: 70px !important;
+        height: 70px !important;
+        margin: 0 auto 10px !important;
+    }
+    .perfil-card h3 {
+        font-size: 15px !important;
+    }
+    .btn-add-circle {
+        width: 65px !important;
+        height: 65px !important;
+        font-size: 28px !important;
+        margin: 0 auto 10px !important;
+    }
+
+    /* 4. Navbar ajustado para que quepa el desplegable */
+    .topbar {
+        padding: 15px 15px !important;
+    }
+    .nav {
+        gap: 8px !important;
+    }
+    .nav-perfil {
+        margin-left: 5px !important;
+    }
+    .dropdown-menu {
+        right: -10px !important; /* Evita que se salga de la pantalla */
+        min-width: 210px !important;
+    }
+}

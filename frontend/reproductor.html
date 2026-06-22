@@ -15,7 +15,25 @@
     <nav class="nav">
         <a href="home.html">Inicio</a>
         <a href="mi-lista.html">Mi Lista</a>
-        <a href="seleccionar-perfil.html">Cambiar perfil</a>
+
+        <div class="nav-perfil">
+            <div class="nav-perfil-trigger">
+                <img src="img/Red.jpg" id="navAvatar" class="nav-perfil-avatar" alt="Perfil">
+                <span class="nav-perfil-arrow">▼</span>
+            </div>
+            <div class="dropdown-menu">
+                <div style="padding: 10px 20px; font-weight: bold; border-bottom: 1px solid rgba(255,255,255,0.1); margin-bottom: 5px;" id="navNombrePerfil">Cargando...</div>
+                
+                <button onclick="abrirEdicionPerfilActual()">✏️ Editar perfil</button>
+                <a href="seleccionar-perfil.html">👥 Cambiar de perfil</a>
+                <div class="dropdown-divider"></div>
+                <a href="planes.html">💳 Planes</a>
+                <a href="facturacion.html">📄 Facturación</a>
+                <a href="suscripcion.html">⭐ Suscripción</a>
+                <div class="dropdown-divider"></div>
+                <button onclick="cerrarSesionNav()">🚪 Cerrar sesión</button>
+            </div>
+        </div>
     </nav>
 </header>
 
@@ -98,7 +116,95 @@
     </section>
 
 </main>
+<div id="modalEditarPerfil" class="modal-overlay">
+    <section class="modal-card">
+        <h2>Editar perfil</h2>
+        
+        <label>Nombre</label>
+        <input type="text" id="editNombrePerfil">
+        
+        <label>Color de Avatar</label>
+        <select id="editAvatarPerfil" style="margin-bottom: 15px; width: 100%; padding: 12px; background: rgba(255,255,255,0.1); color: white; border: 1px solid rgba(255,255,255,0.2); border-radius: 8px; outline: none;">
+            <option value="Red.jpg" style="color: black;">Rojo</option>
+            <option value="Blue.jpg" style="color: black;">Azul</option>
+            <option value="Green.jpg" style="color: black;">Verde</option>
+            <option value="Yellow.jpg" style="color: black;">Amarillo</option>
+            <option value="Pink.jpg" style="color: black;">Rosa</option>
+        </select>
+
+        <label class="checkbox-line" style="margin-bottom: 20px;">
+            <input type="checkbox" id="editInfantilPerfil"> Perfil infantil
+        </label>
+
+        <div class="modal-actions">
+            <button class="btn btn-secondary" onclick="document.getElementById('modalEditarPerfil').classList.remove('show')">Cancelar</button>
+            <button class="btn btn-primary" onclick="guardarEdicionPerfilActual()">Guardar Cambios</button>
+        </div>
+    </section>
+</div>
 
 <script src="js/reproductor.js"></script>
+<script>
+    const NAV_API_BASE = window.location.origin;
+
+    function cerrarSesionNav() {
+        localStorage.clear();
+        sessionStorage.clear();
+        window.location.href = "index.html";
+    }
+
+    async function cargarDatosTopbar() {
+        const usuario_id = localStorage.getItem("usuario_id") || sessionStorage.getItem("usuario_id");
+        const perfil_id = localStorage.getItem("perfil_id") || sessionStorage.getItem("perfil_id");
+        if (!usuario_id || !perfil_id) return;
+        try {
+            const res = await fetch(`${NAV_API_BASE}/perfiles/${usuario_id}`);
+            const perfiles = await res.json();
+            const actual = perfiles.find(p => String(p.id) === String(perfil_id));
+            if (actual) {
+                const img = actual.avatar.includes('.') ? actual.avatar : actual.avatar + '.jpg';
+                document.getElementById("navAvatar").src = `img/${img}`;
+                document.getElementById("navNombrePerfil").innerText = actual.nombre;
+                window.perfilNavData = actual; 
+            }
+        } catch (e) {}
+    }
+
+    function abrirEdicionPerfilActual() {
+        if (!window.perfilNavData) return;
+        document.getElementById("editNombrePerfil").value = window.perfilNavData.nombre;
+        const av = window.perfilNavData.avatar;
+        document.getElementById("editAvatarPerfil").value = av.includes('.') ? av : av + '.jpg';
+        document.getElementById("editInfantilPerfil").checked = (Number(window.perfilNavData.infantil) === 1);
+        document.getElementById("modalEditarPerfil").classList.add("show");
+    }
+
+    async function guardarEdicionPerfilActual() {
+        const perfil_id = localStorage.getItem("perfil_id") || sessionStorage.getItem("perfil_id");
+        const nombre = document.getElementById("editNombrePerfil").value.trim();
+        const avatar = document.getElementById("editAvatarPerfil").value;
+        const infantil = document.getElementById("editInfantilPerfil").checked;
+        if (!nombre) return alert("El nombre es obligatorio");
+        try {
+            const res = await fetch(`${NAV_API_BASE}/perfiles/${perfil_id}`, {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ nombre, avatar, infantil })
+            });
+            if ((await res.json()).ok) {
+                if (localStorage.getItem("perfil_nombre")) {
+                    localStorage.setItem("perfil_nombre", nombre);
+                    localStorage.setItem("perfil_infantil", infantil ? "1" : "0");
+                } else {
+                    sessionStorage.setItem("perfil_nombre", nombre);
+                    sessionStorage.setItem("perfil_infantil", infantil ? "1" : "0");
+                }
+                window.location.reload(); 
+            }
+        } catch(e) { alert("Error de conexión"); }
+    }
+
+    document.addEventListener("DOMContentLoaded", cargarDatosTopbar);
+</script>
 </body>
 </html>
