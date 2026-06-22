@@ -839,7 +839,8 @@ input[type="range"]::-webkit-slider-thumb:hover {
 
 /* Solución al cuadro blanco (iOS/Android) sin romper el Javascript */
 input[type="range"] {
-    -webkit-appearance: none;
+    -webkit-appearance: none; /* Regla para Chrome, Safari, Edge */
+    appearance: none;
     background: transparent; /* Deja que el JS ponga el color rojo */
 }
 
@@ -893,11 +894,14 @@ input[type="range"]::-webkit-slider-thumb {
     gap: 15px !important;
 }
 
-/* 4. Reparación de Barras (Adiós cuadro blanco feo) */
+/* 4. Reparación de Barras (Color visible y dinámico) */
 input[type="range"] {
     -webkit-appearance: none !important;
     appearance: none !important;
-    background: rgba(255, 255, 255, 0.3) !important;
+    
+    /* EL ARREGLO: Se quitó el !important para que tu JS pueda pintar la barra de progreso en rojo */
+    background: rgba(255, 255, 255, 0.3); 
+    
     height: 4px !important;
     border-radius: 2px !important;
     outline: none !important;
@@ -911,7 +915,7 @@ input[type="range"]::-webkit-slider-thumb {
     appearance: none !important;
     width: 13px !important;
     height: 13px !important;
-    background: #e50914 !important;
+    background: #e50914 !important; /* La bolita roja */
     border-radius: 50% !important;
     cursor: pointer !important;
     transition: transform 0.1s !important;
@@ -924,7 +928,6 @@ input[type="range"]::-webkit-slider-thumb:hover {
 #barraVolumen {
     width: 80px !important;
 }
-
 /* 5. PANTALLA COMPLETA TOTAL (Abarca el 100% del monitor/celular) */
 #videoContenedor:fullscreen,
 #videoContenedor:-webkit-full-screen {
