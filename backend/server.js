@@ -385,6 +385,49 @@ app.get("/contenido", (req, res) => {
     );
 });
 
+app.get("/contenido/perfil/:perfil_id", (req, res) => {
+    const perfil_id = req.params.perfil_id;
+
+    if (!perfil_id) {
+        return res.json([]);
+    }
+
+    conexion.query(
+        "SELECT infantil FROM perfiles WHERE id = ?",
+        [perfil_id],
+        (error, perfiles) => {
+            if (error) {
+                console.log(error);
+                return res.json([]);
+            }
+
+            if (perfiles.length === 0) {
+                return res.json([]);
+            }
+
+            const esInfantil = Number(perfiles[0].infantil) === 1;
+
+            let sql = "SELECT * FROM contenido";
+            const parametros = [];
+
+            if (esInfantil) {
+                sql += " WHERE infantil = 1";
+            }
+
+            sql += " ORDER BY id DESC";
+
+            conexion.query(sql, parametros, (error, resultados) => {
+                if (error) {
+                    console.log(error);
+                    return res.json([]);
+                }
+
+                res.json(resultados);
+            });
+        }
+    );
+});
+
 app.get("/contenido/:id", (req, res) => {
     const id = req.params.id;
 
@@ -490,6 +533,8 @@ app.post("/perfiles", (req, res) => {
         }
     );
 });
+
+
 app.post("/perfiles/verificar", (req, res) => {
     const { usuario_id, perfil_id, password_perfil } = req.body;
 
@@ -501,7 +546,7 @@ app.post("/perfiles/verificar", (req, res) => {
     }
 
     conexion.query(
-        `SELECT id, nombre, password_perfil
+        `SELECT id, nombre, infantil, password_perfil
          FROM perfiles
          WHERE id = ? AND usuario_id = ?`,
         [perfil_id, usuario_id],
@@ -529,7 +574,8 @@ app.post("/perfiles/verificar", (req, res) => {
                     mensaje: "Perfil sin contraseña configurada",
                     perfil: {
                         id: perfil.id,
-                        nombre: perfil.nombre
+                        nombre: perfil.nombre,
+                        infantil: Number(perfil.infantil) === 1 ? 1 : 0
                     }
                 });
             }
@@ -548,12 +594,14 @@ app.post("/perfiles/verificar", (req, res) => {
                 mensaje: "Perfil verificado correctamente",
                 perfil: {
                     id: perfil.id,
-                    nombre: perfil.nombre
+                    nombre: perfil.nombre,
+                    infantil: Number(perfil.infantil) === 1 ? 1 : 0
                 }
             });
         }
     );
 });
+
 app.post("/perfiles/recuperar-iniciar", (req, res) => {
     const { usuario_id, perfil_id } = req.body;
 
@@ -996,6 +1044,134 @@ app.get("/tmdb/populares", async (req, res) => {
     } catch (error) {
         console.log("Error al obtener populares de TMDb:", error.message);
         res.json([]);
+    }
+});
+
+app.get("/tmdb/sincronizar", async (req, res) => {
+    try {
+        let totalInsertados = 0;
+        let totalActualizados = 0;
+        let totalErrores = 0;
+
+        const paginas = [1, 2];
+
+        for (const pagina of paginas) {
+            const respuesta = await axios.get(
+                "https://api.themoviedb.org/3/movie/popular",
+                {
+                    params: {
+                        api_key: TMDB_API_KEY,
+                        language: "es-ES",
+                        page: pagina
+                    }
+                }
+            );
+
+            const peliculas = respuesta.data.results || [];
+
+            for (const pelicula of peliculas) {
+                try {
+                    const detalle = await axios.get(
+                        `https://api.themoviedb.org/3/movie/${pelicula.id}`,
+                        {
+                            params: {
+                                api_key: TMDB_API_KEY,
+                                language: "es-ES"
+                            }
+                        }
+                    );
+
+                    const p = detalle.data;
+
+                    const genero = p.genres && p.genres.length > 0
+                        ? p.genres.map(g => g.name).join(", ")
+                        : "Sin género";
+
+                    const imagen = p.poster_path
+                        ? `https://image.tmdb.org/t/p/w500${p.poster_path}`
+                        : "";
+
+                    const fondo = p.backdrop_path
+                        ? `https://image.tmdb.org/t/p/original${p.backdrop_path}`
+                        : "";
+
+                    const generoMinuscula = genero.toLowerCase();
+
+                    const esInfantil =
+                        generoMinuscula.includes("familia") ||
+                        generoMinuscula.includes("animación") ||
+                        generoMinuscula.includes("animacion");
+
+                    await new Promise((resolve) => {
+                        conexion.query(
+                            `INSERT INTO contenido
+                             (titulo, tipo, genero, descripcion, imagen, fondo, tmdb_id, fecha_estreno, calificacion, origen, infantil)
+                             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                             ON DUPLICATE KEY UPDATE
+                                titulo = VALUES(titulo),
+                                tipo = VALUES(tipo),
+                                genero = VALUES(genero),
+                                descripcion = VALUES(descripcion),
+                                imagen = VALUES(imagen),
+                                fondo = VALUES(fondo),
+                                fecha_estreno = VALUES(fecha_estreno),
+                                calificacion = VALUES(calificacion),
+                                origen = VALUES(origen),
+                                infantil = VALUES(infantil)`,
+                            [
+                                p.title,
+                                "pelicula",
+                                genero,
+                                p.overview || "Sin descripción disponible.",
+                                imagen,
+                                fondo,
+                                p.id,
+                                p.release_date || null,
+                                p.vote_average || 0,
+                                "tmdb",
+                                esInfantil ? 1 : 0
+                            ],
+                            (error, resultado) => {
+                                if (error) {
+                                    console.log("Error al sincronizar película:", error);
+                                    totalErrores++;
+                                    return resolve();
+                                }
+
+                                if (resultado.affectedRows === 1) {
+                                    totalInsertados++;
+                                } else {
+                                    totalActualizados++;
+                                }
+
+                                resolve();
+                            }
+                        );
+                    });
+
+                } catch (errorPelicula) {
+                    console.log("Error al obtener detalle de película:", errorPelicula.message);
+                    totalErrores++;
+                }
+            }
+        }
+
+        res.json({
+            ok: true,
+            mensaje: "Sincronización con TMDb completada",
+            insertados: totalInsertados,
+            actualizados: totalActualizados,
+            errores: totalErrores
+        });
+
+    } catch (error) {
+        console.log("Error general al sincronizar TMDb:", error.message);
+
+        res.json({
+            ok: false,
+            mensaje: "No se pudo sincronizar con TMDb",
+            error: error.message
+        });
     }
 });
 

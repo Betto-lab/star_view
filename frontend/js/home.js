@@ -2,6 +2,12 @@ const API_BASE = window.location.origin;
 
 let catalogo = [];
 
+function esPerfilInfantilActivo() {
+    return localStorage.getItem("perfil_infantil") === "1" ||
+           localStorage.getItem("control_parental") === "1" ||
+           localStorage.getItem("control_parental") === "true";
+}
+
 function mostrarToast(texto, tipo = "info") {
     let contenedor = document.querySelector(".toast-container");
 
@@ -14,13 +20,19 @@ function mostrarToast(texto, tipo = "info") {
     const toast = document.createElement("div");
     toast.className = `toast ${tipo}`;
     toast.textContent = texto;
+
     contenedor.appendChild(toast);
 
-    setTimeout(() => toast.classList.add("show"), 50);
+    setTimeout(() => {
+        toast.classList.add("show");
+    }, 50);
 
     setTimeout(() => {
         toast.classList.remove("show");
-        setTimeout(() => toast.remove(), 280);
+
+        setTimeout(() => {
+            toast.remove();
+        }, 280);
     }, 2700);
 }
 
@@ -53,6 +65,7 @@ async function verificarAccesoCatalogo() {
         }
 
         return true;
+
     } catch (error) {
         console.log("Error al verificar suscripción:", error);
         window.location.href = "planes.html";
@@ -80,7 +93,11 @@ function protegerPerfil() {
 
 function normalizarImagen(imagen) {
     if (!imagen) return "img/backdrop.jpg";
-    if (imagen.startsWith("http") || imagen.startsWith("img/")) return imagen;
+
+    if (imagen.startsWith("http") || imagen.startsWith("img/")) {
+        return imagen;
+    }
+
     return `img/${imagen}`;
 }
 
@@ -95,22 +112,47 @@ function escapeHTML(texto) {
 
 function cardContenido(item, opciones = {}) {
     const porcentaje = Number(item.porcentaje || 0);
+
     const progreso = opciones.progreso
-        ? `<div class="progress-wrap"><div class="progress-bar" style="width:${Math.min(porcentaje, 100)}%"></div></div>`
+        ? `
+            <div class="progress-wrap">
+                <div class="progress-bar" style="width:${Math.min(porcentaje, 100)}%"></div>
+            </div>
+        `
+        : "";
+
+    const etiquetaInfantil = Number(item.infantil) === 1
+        ? `<span class="badge-kids">Infantil</span>`
         : "";
 
     return `
         <article class="card">
-            <img src="${normalizarImagen(item.imagen)}" class="poster" alt="${escapeHTML(item.titulo)}" style="cursor: pointer;" onclick="verAhora(${item.id})">
+            <img 
+                src="${normalizarImagen(item.imagen)}" 
+                class="poster" 
+                alt="${escapeHTML(item.titulo)}" 
+                style="cursor: pointer;" 
+                onclick="verAhora(${item.id})"
+            >
 
             <div class="card-info">
                 <h3>${escapeHTML(item.titulo)}</h3>
-                <p>${escapeHTML(item.tipo || "Contenido")} · ${escapeHTML(item.genero || "Sin género")}</p>
+                <p>
+                    ${escapeHTML(item.tipo || "Contenido")} · 
+                    ${escapeHTML(item.genero || "Sin género")}
+                </p>
+
+                ${etiquetaInfantil}
                 ${progreso}
 
                 <div class="card-actions">
-                    <button onclick="verAhora(${item.id})">${opciones.progreso ? "Continuar" : "Ver ahora"}</button>
-                    <button onclick="agregarMiLista(${item.id})">+ Mi Lista</button>
+                    <button onclick="verAhora(${item.id})">
+                        ${opciones.progreso ? "Continuar" : "Ver ahora"}
+                    </button>
+
+                    <button onclick="agregarMiLista(${item.id})">
+                        + Mi Lista
+                    </button>
                 </div>
             </div>
         </article>
@@ -120,32 +162,78 @@ function cardContenido(item, opciones = {}) {
 function cardTMDB(item) {
     return `
         <article class="card">
-            <img src="${normalizarImagen(item.imagen)}" class="poster" alt="${escapeHTML(item.titulo)}" style="cursor: pointer;" onclick="verAhoraTMDB(${item.tmdb_id})">
+            <img 
+                src="${normalizarImagen(item.imagen)}" 
+                class="poster" 
+                alt="${escapeHTML(item.titulo)}" 
+                style="cursor: pointer;" 
+                onclick="verAhoraTMDB(${item.tmdb_id})"
+            >
 
             <div class="card-info">
                 <h3>${escapeHTML(item.titulo)}</h3>
                 <p>TMDb · ⭐ ${Number(item.calificacion || 0).toFixed(1)}</p>
 
                 <div class="card-actions">
-                    <button onclick="verAhoraTMDB(${item.tmdb_id})">Ver ahora</button>
-                    <button onclick="agregarMiListaTMDB(${item.tmdb_id})">+ Mi Lista</button>
+                    <button onclick="verAhoraTMDB(${item.tmdb_id})">
+                        Ver ahora
+                    </button>
+
+                    <button onclick="agregarMiListaTMDB(${item.tmdb_id})">
+                        + Mi Lista
+                    </button>
                 </div>
             </div>
         </article>
     `;
 }
 
+function mostrarAvisoPerfilInfantil() {
+    let aviso = document.getElementById("avisoPerfilInfantil");
+
+    if (aviso) return;
+
+    const main = document.querySelector("main") || document.body;
+
+    aviso = document.createElement("div");
+    aviso.id = "avisoPerfilInfantil";
+    aviso.className = "aviso-infantil";
+    aviso.innerText = "Perfil infantil activo: solo se muestra contenido apto para niños.";
+
+    main.prepend(aviso);
+}
+
 async function cargarCatalogo() {
+    const perfil_id = obtenerPerfilId();
+    const contenedor = document.getElementById("catalogo");
+
+    if (!perfil_id) {
+        window.location.href = "seleccionar-perfil.html";
+        return;
+    }
+
     try {
-        const respuesta = await fetch(`${API_BASE}/contenido`);
+        const respuesta = await fetch(`${API_BASE}/contenido/perfil/${perfil_id}`);
         catalogo = await respuesta.json();
+
+        if (esPerfilInfantilActivo()) {
+            mostrarAvisoPerfilInfantil();
+
+            catalogo = catalogo.filter(item => {
+                return Number(item.infantil) === 1;
+            });
+        }
+
         mostrarCatalogo(catalogo);
+
     } catch (error) {
-        const contenedor = document.getElementById("catalogo");
+        console.log("Error al cargar catálogo:", error);
 
         if (contenedor) {
             contenedor.innerHTML = `
-                <div class="empty-state">No se pudo cargar el catálogo local.</div>
+                <div class="empty-state">
+                    No se pudo cargar el catálogo local.
+                </div>
             `;
         }
     }
@@ -159,7 +247,11 @@ function mostrarCatalogo(lista) {
     contenedor.innerHTML = "";
 
     if (!lista || lista.length === 0) {
-        contenedor.innerHTML = `<div class="empty-state">No se encontraron resultados.</div>`;
+        contenedor.innerHTML = `
+            <div class="empty-state">
+                No se encontraron resultados.
+            </div>
+        `;
         return;
     }
 
@@ -208,7 +300,9 @@ async function agregarMiLista(contenido_id) {
             datos.mensaje || "Agregado a Mi Lista",
             datos.ok ? "ok" : "error"
         );
+
     } catch (error) {
+        console.log("Error al agregar a Mi Lista:", error);
         mostrarToast("No se pudo agregar a Mi Lista", "error");
     }
 }
@@ -232,6 +326,7 @@ async function verAhora(id) {
                 contenido_id: id
             })
         });
+
     } catch (error) {
         console.log("No se pudo registrar historial:", error);
     }
@@ -247,7 +342,13 @@ async function cargarContinuarViendo() {
 
     try {
         const respuesta = await fetch(`${API_BASE}/continuar/${perfil_id}`);
-        const lista = await respuesta.json();
+        let lista = await respuesta.json();
+
+        if (esPerfilInfantilActivo()) {
+            lista = lista.filter(item => {
+                return Number(item.infantil) === 1;
+            });
+        }
 
         contenedor.innerHTML = "";
 
@@ -260,10 +361,17 @@ async function cargarContinuarViendo() {
             return;
         }
 
-        contenedor.innerHTML = lista.map(item => cardContenido(item, { progreso: true })).join("");
+        contenedor.innerHTML = lista
+            .map(item => cardContenido(item, { progreso: true }))
+            .join("");
+
     } catch (error) {
+        console.log("Error al cargar Continuar viendo:", error);
+
         contenedor.innerHTML = `
-            <div class="empty-state">No se pudo cargar Continuar viendo.</div>
+            <div class="empty-state">
+                No se pudo cargar Continuar viendo.
+            </div>
         `;
     }
 }
@@ -273,26 +381,46 @@ async function cargarTMDB() {
 
     if (!contenedor) return;
 
+    if (esPerfilInfantilActivo()) {
+        contenedor.innerHTML = "";
+        return;
+    }
+
     try {
         const respuesta = await fetch(`${API_BASE}/tmdb/populares`);
         const peliculas = await respuesta.json();
 
         if (!peliculas || peliculas.length === 0) {
             contenedor.innerHTML = `
-                <div class="empty-state">No se pudo cargar TMDb en este momento.</div>
+                <div class="empty-state">
+                    No se pudo cargar TMDb en este momento.
+                </div>
             `;
             return;
         }
 
-        contenedor.innerHTML = peliculas.slice(0, 12).map(item => cardTMDB(item)).join("");
+        contenedor.innerHTML = peliculas
+            .slice(0, 12)
+            .map(item => cardTMDB(item))
+            .join("");
+
     } catch (error) {
+        console.log("Error al cargar TMDb:", error);
+
         contenedor.innerHTML = `
-            <div class="empty-state">No se pudo conectar con TMDb.</div>
+            <div class="empty-state">
+                No se pudo conectar con TMDb.
+            </div>
         `;
     }
 }
 
 async function importarTMDB(tmdb_id) {
+    if (esPerfilInfantilActivo()) {
+        mostrarToast("TMDb no está disponible en perfiles infantiles", "error");
+        return null;
+    }
+
     try {
         const respuesta = await fetch(`${API_BASE}/tmdb/importar`, {
             method: "POST",
@@ -305,11 +433,15 @@ async function importarTMDB(tmdb_id) {
         const contenido = await respuesta.json();
 
         if (contenido.error) {
-            mostrarToast(contenido.mensaje || "No se pudo importar desde TMDb", "error");
+            mostrarToast(
+                contenido.mensaje || "No se pudo importar desde TMDb",
+                "error"
+            );
             return null;
         }
 
         return contenido;
+
     } catch (error) {
         console.log("Error al importar desde TMDb:", error);
         mostrarToast("No se pudo conectar con TMDb", "error");
@@ -351,9 +483,13 @@ async function inicializarHome() {
         perfilActual.innerText = `Perfil actual: ${nombrePerfil}`;
     }
 
-    cargarContinuarViendo();
-    cargarCatalogo();
-    cargarTMDB();
+    if (esPerfilInfantilActivo()) {
+        mostrarAvisoPerfilInfantil();
+    }
+
+    await cargarContinuarViendo();
+    await cargarCatalogo();
+    await cargarTMDB();
 
     const buscar = document.getElementById("buscar");
 

@@ -22,60 +22,90 @@ function obtenerUsuarioId() {
 
 function mostrarMensajePerfil(texto, tipo = "error") {
     const mensaje = document.getElementById("mensajePerfil");
+
     if (!mensaje) return;
+
     mensaje.innerText = texto;
     mensaje.style.color = tipo === "ok" ? "#86efac" : "#ffb4b8";
 }
 
 function mostrarMensajeClave(texto, tipo = "error") {
     const mensaje = document.getElementById("mensajeClavePerfil");
+
     if (!mensaje) return;
+
     mensaje.innerText = texto;
     mensaje.style.color = tipo === "ok" ? "#86efac" : "#ffb4b8";
 }
 
 function mostrarMensajeRecuperar(texto, tipo = "error") {
     const mensaje = document.getElementById("mensajeRecuperarPerfil");
+
     if (!mensaje) return;
+
     mensaje.innerText = texto;
     mensaje.style.color = tipo === "ok" ? "#86efac" : "#ffb4b8";
 }
 
 function mostrarFormularioPerfil() {
     const form = document.getElementById("formPerfil");
+
     if (form) {
         form.classList.toggle("show");
     }
 }
 
-// --- UTILIDADES DE AVATAR ---
+/* =========================
+   UTILIDADES DE AVATAR
+========================= */
+
 function obtenerRutaAvatar(avatar) {
     if (!avatar) return "img/Red.jpg";
+
     const texto = String(avatar);
-    if (texto.includes(".jpg") || texto.includes(".png") || texto.includes(".jpeg") || texto.includes(".webp")) {
+
+    if (
+        texto.includes(".jpg") ||
+        texto.includes(".png") ||
+        texto.includes(".jpeg") ||
+        texto.includes(".webp")
+    ) {
         return `img/${texto}`;
     }
+
     const avatarNormalizado = texto.toLowerCase();
+
     if (avatarNormalizado.includes("azul")) return "img/Blue.jpg";
     if (avatarNormalizado.includes("verde")) return "img/Green.jpg";
     if (avatarNormalizado.includes("morado")) return "img/Purple.jpg";
     if (avatarNormalizado.includes("dorado")) return "img/Gold.jpg";
     if (avatarNormalizado.includes("rojo")) return "img/Red.jpg";
+
     return "img/Red.jpg";
 }
 
 function obtenerNombreAvatar(avatar) {
     if (!avatar) return "Red.jpg";
+
     const texto = String(avatar);
-    if (texto.includes(".jpg") || texto.includes(".png") || texto.includes(".jpeg") || texto.includes(".webp")) {
+
+    if (
+        texto.includes(".jpg") ||
+        texto.includes(".png") ||
+        texto.includes(".jpeg") ||
+        texto.includes(".webp")
+    ) {
         return texto;
     }
+
     const avatarNormalizado = texto.toLowerCase();
+
     if (avatarNormalizado.includes("azul")) return "Blue.jpg";
     if (avatarNormalizado.includes("verde")) return "Green.jpg";
     if (avatarNormalizado.includes("morado")) return "Purple.jpg";
     if (avatarNormalizado.includes("dorado")) return "Gold.jpg";
     if (avatarNormalizado.includes("rojo")) return "Red.jpg";
+
     return "Red.jpg";
 }
 
@@ -85,49 +115,93 @@ function inicialPerfil(nombre) {
 
 function seleccionarAvatarPerfil(avatar, boton) {
     document.getElementById("avatarPerfil").value = avatar;
+
     document.querySelectorAll(".avatar-option").forEach(opcion => {
         opcion.classList.remove("active");
     });
+
     boton.classList.add("active");
 }
 
-// ==========================================
-// HU03 & HU04 - LÓGICA DE PERFILES Y PIN
-// ==========================================
+/* =========================
+   CARGAR PERFILES
+========================= */
 
 async function cargarPerfiles() {
-    const usuarioId = obtenerUsuarioId();
-    if (!usuarioId) return;
+    const usuario_id = obtenerUsuarioId();
+
+    if (!usuario_id) return;
 
     const contenedor = document.getElementById("perfilesContainer");
+
     if (!contenedor) return;
 
     try {
-        const respuesta = await fetch(`${API_BASE}/perfiles/${usuarioId}`);
+        const respuesta = await fetch(`${API_BASE}/perfiles/${usuario_id}`);
         const perfiles = await respuesta.json();
 
-        // CORRECCIÓN: Usamos <img> para mostrar la foto real del avatar
-        contenedor.innerHTML = perfiles.map(perfil => `
-            <div class="perfil-card" onclick="intentarIngresarPerfil(${perfil.id}, '${perfil.nombre}')">
-                <div class="perfil-avatar" style="overflow: hidden; background: transparent;">
-                    <img src="${obtenerRutaAvatar(perfil.avatar)}" alt="${perfil.nombre}" style="width: 100%; height: 100%; object-fit: cover; border-radius: 5px;">
+        if (!perfiles || perfiles.length === 0) {
+            contenedor.innerHTML = `
+                <div class="empty-state">
+                    Aún no tienes perfiles. Crea uno para ingresar al catálogo.
                 </div>
+            `;
+            return;
+        }
+
+        contenedor.innerHTML = "";
+
+        perfiles.forEach(perfil => {
+            const card = document.createElement("article");
+            card.className = "perfil-card";
+
+            card.innerHTML = `
+                <div class="perfil-avatar" style="overflow: hidden; background: transparent;">
+                    <img 
+                        src="${obtenerRutaAvatar(perfil.avatar)}" 
+                        alt="${perfil.nombre}" 
+                        style="width: 100%; height: 100%; object-fit: cover; border-radius: 5px;"
+                    >
+                </div>
+
                 <h3>${perfil.nombre} 🔒</h3>
-                ${perfil.infantil ? '<span class="badge-kids" style="background:#e50914;color:#fff;padding:2px 5px;border-radius:4px;font-size:12px;margin-top:5px;display:inline-block;">Infantil</span>' : ''}
-            </div>
-        `).join("");
+
+                ${
+                    Number(perfil.infantil) === 1
+                        ? `<span class="badge-kids" style="background:#e50914;color:#fff;padding:2px 5px;border-radius:4px;font-size:12px;margin-top:5px;display:inline-block;">Infantil</span>`
+                        : ""
+                }
+            `;
+
+            card.addEventListener("click", () => {
+                abrirModalClavePerfil({
+                    id: perfil.id,
+                    nombre: perfil.nombre,
+                    infantil: Number(perfil.infantil) === 1 ? 1 : 0
+                });
+            });
+
+            contenedor.appendChild(card);
+        });
+
     } catch (error) {
-        console.log("Error al cargar perfiles", error);
+        console.log("Error al cargar perfiles:", error);
+
+        contenedor.innerHTML = `
+            <div class="empty-state">
+                No se pudieron cargar los perfiles.
+            </div>
+        `;
     }
 }
 
-// CORRECCIÓN: Como tu backend siempre requiere PIN, SIEMPRE abrimos el modal
-function intentarIngresarPerfil(perfilId, perfilNombre) {
-    abrirModalClavePerfil({ id: perfilId, nombre: perfilNombre });
-}
+/* =========================
+   CREAR PERFIL
+========================= */
 
 async function crearPerfil() {
     const usuario_id = obtenerUsuarioId();
+
     if (!usuario_id) return;
 
     const nombre = document.getElementById("nombrePerfil").value.trim();
@@ -136,13 +210,13 @@ async function crearPerfil() {
     const confirmar = document.getElementById("confirmarPasswordPerfil").value.trim();
     const infantil = document.getElementById("infantilPerfil").checked;
 
-    if (!nombre || !avatar) {
-        mostrarMensajePerfil("El nombre y el avatar son obligatorios");
+    if (!nombre || !avatar || !password || !confirmar) {
+        mostrarMensajePerfil("Completa nombre, avatar y contraseña");
         return;
     }
 
-    if (password && password.length < 4) {
-        mostrarMensajePerfil("Si usas PIN/Contraseña, debe tener mínimo 4 caracteres");
+    if (password.length < 4) {
+        mostrarMensajePerfil("La contraseña del perfil debe tener mínimo 4 caracteres");
         return;
     }
 
@@ -154,13 +228,15 @@ async function crearPerfil() {
     try {
         const respuesta = await fetch(`${API_BASE}/perfiles`, {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: {
+                "Content-Type": "application/json"
+            },
             body: JSON.stringify({
-                usuario_id: usuario_id,
-                nombre: nombre,
-                avatar: avatar,
-                infantil: infantil,
-                password_perfil: password 
+                usuario_id,
+                nombre,
+                avatar,
+                infantil,
+                password_perfil: password
             })
         });
 
@@ -178,8 +254,9 @@ async function crearPerfil() {
         document.getElementById("confirmarPasswordPerfil").value = "";
         document.getElementById("infantilPerfil").checked = false;
 
-        mostrarFormularioPerfil(); 
-        await cargarPerfiles(); 
+        mostrarFormularioPerfil();
+
+        await cargarPerfiles();
 
     } catch (error) {
         console.log(error);
@@ -187,12 +264,16 @@ async function crearPerfil() {
     }
 }
 
-// --- MANEJO DE MODAL DE INGRESO (CON PIN) ---
+/* =========================
+   MODAL INGRESO PERFIL
+========================= */
+
 function abrirModalClavePerfil(perfil) {
     perfilPendiente = perfil;
 
     document.getElementById("modalPerfilNombre").innerText = perfil.nombre;
     document.getElementById("passwordIngresoPerfil").value = "";
+
     mostrarMensajeClave("");
 
     document.getElementById("modalClavePerfil").classList.add("show");
@@ -209,6 +290,7 @@ function cerrarModalClavePerfil() {
 
 async function validarIngresoPerfil() {
     const usuario_id = obtenerUsuarioId();
+
     if (!usuario_id || !perfilPendiente) return;
 
     const password = document.getElementById("passwordIngresoPerfil").value.trim();
@@ -218,53 +300,68 @@ async function validarIngresoPerfil() {
         return;
     }
 
-    validarIngresoBackend(perfilPendiente.id, password, perfilPendiente.nombre);
+    await validarIngresoBackend(
+        perfilPendiente.id,
+        password,
+        perfilPendiente.nombre
+    );
 }
 
 async function validarIngresoBackend(perfil_id, pin, perfil_nombre) {
     const usuario_id = obtenerUsuarioId();
+
+    if (!usuario_id) return;
+
     try {
         const respuesta = await fetch(`${API_BASE}/perfiles/verificar`, {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ 
-                usuario_id: usuario_id,
-                perfil_id: perfil_id, 
-                password_perfil: pin 
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+                usuario_id,
+                perfil_id,
+                password_perfil: pin
             })
         });
 
         const datos = await respuesta.json();
 
         if (!datos.ok) {
-            if (pin !== "") {
-                mostrarMensajeClave(datos.mensaje || "Contraseña incorrecta");
-            } else {
-                alert("Error al acceder al perfil");
-            }
+            mostrarMensajeClave(datos.mensaje || "Contraseña incorrecta");
             return;
         }
 
-        // Si el servidor valida, guardamos la sesión y avanzamos al catálogo
-        localStorage.setItem("perfil_id", datos.perfil.id);
-        localStorage.setItem("perfil_nombre", datos.perfil.nombre);
-        localStorage.setItem("control_parental", datos.perfil.infantil || false);
+        const perfilValidado = datos.perfil || {};
+        const infantilServidor = perfilValidado.infantil;
+        const infantilLocal = perfilPendiente ? perfilPendiente.infantil : 0;
 
-        if (pin !== "") {
-            mostrarMensajeClave("Perfil verificado correctamente", "ok");
-        }
+        const esInfantil =
+            Number(infantilServidor) === 1 ||
+            Number(infantilLocal) === 1;
+
+        localStorage.setItem("perfil_id", perfilValidado.id || perfil_id);
+        localStorage.setItem("perfil_nombre", perfilValidado.nombre || perfil_nombre);
+
+        localStorage.setItem("perfil_infantil", esInfantil ? "1" : "0");
+        localStorage.setItem("control_parental", esInfantil ? "1" : "0");
+
+        mostrarMensajeClave("Perfil verificado correctamente", "ok");
 
         setTimeout(() => {
             window.location.href = "home.html";
-        }, pin !== "" ? 500 : 100);
+        }, 500);
 
     } catch (error) {
         console.log(error);
-        if (pin !== "") mostrarMensajeClave("No se pudo conectar con el servidor");
+        mostrarMensajeClave("No se pudo conectar con el servidor");
     }
 }
 
-// --- RECUPERACIÓN DE CONTRASEÑA DE PERFIL ---
+/* =========================
+   RECUPERAR CONTRASEÑA DE PERFIL
+========================= */
+
 function abrirModalRecuperarPerfil() {
     if (!perfilPendiente) {
         mostrarMensajeClave("Selecciona un perfil primero");
@@ -312,7 +409,9 @@ async function enviarCodigoRecuperacionPerfil() {
     try {
         const respuesta = await fetch(`${API_BASE}/perfiles/recuperar-iniciar`, {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: {
+                "Content-Type": "application/json"
+            },
             body: JSON.stringify({
                 usuario_id,
                 perfil_id: perfilRecuperacion.id
@@ -333,8 +432,10 @@ async function enviarCodigoRecuperacionPerfil() {
 
     } catch (error) {
         console.log(error);
+
         boton.innerText = textoOriginal;
         boton.disabled = false;
+
         mostrarMensajeRecuperar("No se pudo conectar con el servidor");
     }
 }
@@ -369,7 +470,9 @@ async function restablecerPasswordPerfil() {
     try {
         const respuesta = await fetch(`${API_BASE}/perfiles/recuperar-confirmar`, {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: {
+                "Content-Type": "application/json"
+            },
             body: JSON.stringify({
                 usuario_id,
                 perfil_id: perfilRecuperacion.id,
@@ -389,10 +492,12 @@ async function restablecerPasswordPerfil() {
 
         setTimeout(() => {
             document.getElementById("modalRecuperarPerfil").classList.remove("show");
+
             perfilPendiente = perfilRecuperacion;
             perfilRecuperacion = null;
 
             document.getElementById("passwordIngresoPerfil").value = "";
+
             mostrarMensajeClave("Ahora ingresa con tu nueva contraseña", "ok");
             document.getElementById("modalClavePerfil").classList.add("show");
         }, 900);
@@ -403,7 +508,10 @@ async function restablecerPasswordPerfil() {
     }
 }
 
-// Inicializadores y eventos de teclado
+/* =========================
+   EVENTOS
+========================= */
+
 document.addEventListener("DOMContentLoaded", cargarPerfiles);
 
 document.addEventListener("keydown", (event) => {
