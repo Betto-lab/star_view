@@ -1,7 +1,38 @@
 const API_BASE = window.location.origin;
 
 let correoPendiente = "";
+/* ==========================================
+   VALIDADOR DE CORREOS (Kickbox Open API)
+========================================== */
+async function esCorreoReal(correo) {
+    // 1. Primero verificamos el formato básico (texto@texto.com)
+    const regex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!regex.test(correo)) {
+        return { valido: false, mensaje: "El formato del correo es incorrecto." };
+    }
 
+    try {
+        // 2. Extraemos el dominio (ejemplo: de "hola@yopmail.com" sacamos "yopmail.com")
+        const dominio = correo.split('@')[1];
+
+        // 3. Consultamos la API abierta (Cero registros, cero claves)
+        const respuesta = await fetch(`https://open.kickbox.com/v1/disposable/${dominio}`);
+        const data = await respuesta.json();
+
+        // La API devuelve un valor booleano (true) si el correo es desechable
+        if (data.disposable === true) {
+            return { valido: false, mensaje: "No se permiten correos temporales. Usa tu correo personal." };
+        }
+
+        // Si pasa ambas pruebas, es un correo legítimo
+        return { valido: true, mensaje: "Correo aprobado." };
+
+    } catch (error) {
+        console.log("Error al consultar la API de correos:", error);
+        // Si por alguna razón la red falla, dejamos pasar al usuario para no arruinar su experiencia
+        return { valido: true, mensaje: "Aprobado por fallback." };
+    }
+}
 function mostrarMensaje(texto, tipo = "error") {
     const mensaje = document.getElementById("mensaje");
 
