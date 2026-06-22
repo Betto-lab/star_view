@@ -45,32 +45,9 @@
 </main>
 
 <script src="js/suscripcion.js"></script>
-<div id="modalEditarPerfil" class="modal-overlay">
-    <section class="modal-card">
-        <h2>Editar perfil</h2>
-        <label>Nombre</label>
-        <input type="text" id="editNombrePerfil">
-        <label>Color de Avatar</label>
-        <select id="editAvatarPerfil" style="margin-bottom: 15px; width: 100%; padding: 12px; background: rgba(255,255,255,0.1); color: white; border: 1px solid rgba(255,255,255,0.2); border-radius: 8px; outline: none;">
-            <option value="Red.jpg" style="color: black;">Rojo</option>
-            <option value="Blue.jpg" style="color: black;">Azul</option>
-            <option value="Green.jpg" style="color: black;">Verde</option>
-            <option value="Yellow.jpg" style="color: black;">Amarillo</option>
-            <option value="Pink.jpg" style="color: black;">Rosa</option>
-        </select>
-        <label class="checkbox-line" style="margin-bottom: 20px;">
-            <input type="checkbox" id="editInfantilPerfil"> Perfil infantil
-        </label>
-        <div class="modal-actions">
-            <button class="btn btn-secondary" onclick="document.getElementById('modalEditarPerfil').classList.remove('show')">Cancelar</button>
-            <button class="btn btn-primary" onclick="guardarEdicionPerfilActual()">Guardar Cambios</button>
-        </div>
-    </section>
-</div>
-
 <script>
-    // Aseguramos que apunte siempre al backend en el puerto 3000
-    const URL_BACKEND = "http://localhost:3000";
+    // ESTO DETECTA AUTOMÁTICAMENTE LA URL DE PRODUCCIÓN O LOCAL
+    const API_BASE = window.location.origin;
 
     function cerrarSesion() {
         localStorage.clear(); 
@@ -85,8 +62,8 @@
         if (!usuario_id || !perfil_id) return;
 
         try {
-            // Petición directa al backend
-            const res = await fetch(`${URL_BACKEND}/perfiles/${usuario_id}`);
+            // Petición dinámica que no se rompe en producción
+            const res = await fetch(`${API_BASE}/perfiles/${usuario_id}`);
             const perfiles = await res.json();
             const actual = perfiles.find(p => String(p.id) === String(perfil_id));
             
@@ -95,7 +72,7 @@
                 document.getElementById("navAvatar").src = `img/${img}`;
                 document.getElementById("navNombrePerfil").innerText = actual.nombre;
                 
-                // Guardamos los datos en memoria para que el botón Editar funcione
+                // Guardamos los datos en memoria
                 window.perfilActualData = actual; 
             }
         } catch(e) {
@@ -125,7 +102,7 @@
         if (!nombre) return alert("El nombre es obligatorio");
 
         try {
-            const res = await fetch(`${URL_BACKEND}/perfiles/${perfil_id}`, {
+            const res = await fetch(`${API_BASE}/perfiles/${perfil_id}`, {
                 method: "PUT",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ nombre, avatar, infantil })
@@ -154,7 +131,7 @@
         
         const perfil_id = localStorage.getItem("perfil_id") || sessionStorage.getItem("perfil_id");
         try {
-            const res = await fetch(`${URL_BACKEND}/perfiles/${perfil_id}`, { method: "DELETE" });
+            const res = await fetch(`${API_BASE}/perfiles/${perfil_id}`, { method: "DELETE" });
             const datos = await res.json();
             
             if (datos.ok) {
