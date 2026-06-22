@@ -22,6 +22,7 @@
             </div>
             <div class="dropdown-menu">
                 <div style="padding: 10px 20px; font-weight: bold; border-bottom: 1px solid rgba(255,255,255,0.1); margin-bottom: 5px;" id="navNombrePerfil">Cargando...</div>
+                
                 <button onclick="abrirEdicionPerfilActual()">✏️ Editar perfil</button>
                 <a href="seleccionar-perfil.html">👥 Cambiar de perfil</a>
                 <div class="dropdown-divider"></div>
@@ -60,8 +61,34 @@
 </main>
 
 <script src="js/facturacion.js"></script>
+<div id="modalEditarPerfil" class="modal-overlay">
+    <section class="modal-card">
+        <h2>Editar perfil</h2>
+        
+        <label>Nombre</label>
+        <input type="text" id="editNombrePerfil">
+        
+        <label>Color de Avatar</label>
+        <select id="editAvatarPerfil" style="margin-bottom: 15px; width: 100%; padding: 12px; background: rgba(255,255,255,0.1); color: white; border: 1px solid rgba(255,255,255,0.2); border-radius: 8px; outline: none;">
+            <option value="Red.jpg" style="color: black;">Rojo</option>
+            <option value="Blue.jpg" style="color: black;">Azul</option>
+            <option value="Green.jpg" style="color: black;">Verde</option>
+            <option value="Yellow.jpg" style="color: black;">Amarillo</option>
+            <option value="Pink.jpg" style="color: black;">Rosa</option>
+        </select>
+
+        <label class="checkbox-line" style="margin-bottom: 20px;">
+            <input type="checkbox" id="editInfantilPerfil"> Perfil infantil
+        </label>
+
+        <div class="modal-actions">
+            <button class="btn btn-secondary" onclick="document.getElementById('modalEditarPerfil').classList.remove('show')">Cancelar</button>
+            <button class="btn btn-primary" onclick="guardarEdicionPerfilActual()">Guardar Cambios</button>
+        </div>
+    </section>
+</div>
+
 <script>
-    // 1. VARIABLE DINÁMICA (No falla en producción)
     const API_BASE = window.location.origin;
 
     function cerrarSesion() {
@@ -70,11 +97,6 @@
         window.location.href = "index.html";
     }
 
-    // ==========================================
-    // MENÚ DESPLEGABLE Y ADMINISTRACIÓN DE PERFIL
-    // ==========================================
-    
-    // Función separada (Igual que en mi-lista.js)
     async function cargarDatosTopbar() {
         const usuario_id = localStorage.getItem("usuario_id") || sessionStorage.getItem("usuario_id");
         const perfil_id = localStorage.getItem("perfil_id") || sessionStorage.getItem("perfil_id");
@@ -90,8 +112,6 @@
                 const img = actual.avatar.includes('.') ? actual.avatar : actual.avatar + '.jpg';
                 document.getElementById("navAvatar").src = `img/${img}`;
                 document.getElementById("navNombrePerfil").innerText = actual.nombre;
-                
-                // Guardamos en memoria global para el botón Editar
                 window.perfilActualData = actual; 
             }
         } catch (e) {
@@ -99,7 +119,6 @@
         }
     }
 
-    // Funciones globales (Igual que en mi-lista.js)
     function abrirEdicionPerfilActual() {
         if (!window.perfilActualData) return;
         
@@ -144,7 +163,7 @@
     }
 
     async function eliminarPerfilActual() {
-        if(!confirm("¿Estás 100% seguro de eliminar ESTE perfil?")) return;
+        if(!confirm("¿Estás 100% seguro de eliminar ESTE perfil?\nPerderás tu Historial y Mi Lista para siempre.")) return;
         
         const perfil_id = localStorage.getItem("perfil_id") || sessionStorage.getItem("perfil_id");
         try {
@@ -163,7 +182,6 @@
         } catch(e) { alert("Error al eliminar"); }
     }
 
-    // Inicializador (Igual que en mi-lista.js)
     document.addEventListener("DOMContentLoaded", () => {
         cargarDatosTopbar();
     });
