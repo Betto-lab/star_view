@@ -3,7 +3,7 @@ const cors = require("cors");
 const axios = require("axios");
 const bcrypt = require("bcrypt");
 const path = require("path");
-
+const dns = require('dns');
 
 
 require("dotenv").config();
@@ -24,6 +24,20 @@ const app = express();
 const registrosPendientes = new Map();
 const recuperacionesPerfil = new Map();
 
+function dominioAceptaCorreos(correo) {
+    return new Promise((resolve) => {
+        const dominio = correo.split('@')[1];
+
+        // Consultamos los Registros MX (Mail Exchange) del dominio
+        dns.resolveMx(dominio, (err, direcciones) => {
+            if (err || !direcciones || direcciones.length === 0) {
+                resolve(false); // El dominio no existe o no acepta correos (Ej: asdasd.com)
+            } else {
+                resolve(true);  // El dominio es real (Ej: gmail.com)
+            }
+        });
+    });
+}
 
 function validarFormatoCorreo(correo) {
     const expresion = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -128,53 +142,48 @@ app.post("/recuperar-cuenta/confirmar", async (req, res) => {
 app.post("/registro", async (req, res) => {
     const { nombre, correo, password } = req.body;
 
+    // 1. Validaciones básicas de formato
     if (!nombre || !correo || !password) {
-        return res.json({
-            ok: false,
-            mensaje: "Completa todos los campos"
-        });
+        return res.json({ ok: false, mensaje: "Completa todos los campos" });
     }
 
     if (!validarSoloLetras(nombre)) {
-        return res.json({
-            ok: false,
-            mensaje: "El nombre solo puede contener letras y espacios"
-        });
+        return res.json({ ok: false, mensaje: "El nombre solo puede contener letras y espacios" });
     }
 
     if (!validarFormatoCorreo(correo)) {
-        return res.json({
-            ok: false,
-            mensaje: "El formato del correo no es válido"
-        });
+        return res.json({ ok: false, mensaje: "El formato del correo no es válido" });
     }
 
     if (!validarPasswordSegura(password)) {
-        return res.json({
-            ok: false,
-            mensaje: "La contraseña debe tener mínimo 8 caracteres, 1 número y 1 símbolo"
-        });
+        return res.json({ ok: false, mensaje: "La contraseña debe tener mínimo 8 caracteres, 1 número y 1 símbolo" });
     }
 
+    // ==========================================
+    // 🔥 AQUÍ ENTRA LA GUILLOTINA BACKEND (DNS) 🔥
+    // ==========================================
+    const esReal = await dominioAceptaCorreos(correo);
+    if (!esReal) {
+        return res.json({
+            ok: false,
+            mensaje: "El dominio del correo no existe o es temporal. Por favor, usa un correo real."
+        });
+    }
+    // ==========================================
+
     try {
+        // Si el correo es 100% real, buscamos si ya está registrado
         conexion.query(
             "SELECT id FROM usuarios WHERE correo = ?",
             [correo],
             async (error, resultados) => {
                 if (error) {
                     console.log("Error al verificar correo:", error);
-
-                    return res.json({
-                        ok: false,
-                        mensaje: "Error al verificar el correo"
-                    });
+                    return res.json({ ok: false, mensaje: "Error al verificar el correo" });
                 }
 
                 if (resultados.length > 0) {
-                    return res.json({
-                        ok: false,
-                        mensaje: "Este correo ya está registrado"
-                    });
+                    return res.json({ ok: false, mensaje: "Este correo ya está registrado" });
                 }
 
                 const passwordHash = await bcrypt.hash(password, 10);
@@ -189,7 +198,7 @@ app.post("/registro", async (req, res) => {
                 });
 
                 try {
-                    await enviarCorreoVerificacion(correo, nombre, codigo, "perfil");
+                    await enviarCorreoVerificacion(correo, nombre, codigo, "registro"); // <-- Cambié "perfil" por "registro"
 
                     res.json({
                         ok: true,
@@ -197,23 +206,17 @@ app.post("/registro", async (req, res) => {
                     });
                 } catch (errorCorreo) {
                     console.log("Error al enviar correo de verificación:", errorCorreo);
-
                     registrosPendientes.delete(correo);
-
                     res.json({
                         ok: false,
-                        mensaje: "No se pudo enviar el correo de verificación. Revisa la configuración del correo remitente."
+                        mensaje: "No se pudo enviar el correo de verificación. Revisa la configuración."
                     });
                 }
             }
         );
     } catch (error) {
         console.log("Error interno en registro:", error);
-
-        res.json({
-            ok: false,
-            mensaje: "Error interno del servidor"
-        });
+        res.json({ ok: false, mensaje: "Error interno del servidor" });
     }
 });
 

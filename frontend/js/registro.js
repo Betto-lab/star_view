@@ -1,38 +1,10 @@
 const API_BASE = window.location.origin;
 
 let correoPendiente = "";
+
 /* ==========================================
-   VALIDADOR DE CORREOS (Kickbox Open API)
+   UTILIDADES Y MENSAJES
 ========================================== */
-async function esCorreoReal(correo) {
-    // 1. Primero verificamos el formato básico (texto@texto.com)
-    const regex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!regex.test(correo)) {
-        return { valido: false, mensaje: "El formato del correo es incorrecto." };
-    }
-
-    try {
-        // 2. Extraemos el dominio (ejemplo: de "hola@yopmail.com" sacamos "yopmail.com")
-        const dominio = correo.split('@')[1];
-
-        // 3. Consultamos la API abierta (Cero registros, cero claves)
-        const respuesta = await fetch(`https://open.kickbox.com/v1/disposable/${dominio}`);
-        const data = await respuesta.json();
-
-        // La API devuelve un valor booleano (true) si el correo es desechable
-        if (data.disposable === true) {
-            return { valido: false, mensaje: "No se permiten correos temporales. Usa tu correo personal." };
-        }
-
-        // Si pasa ambas pruebas, es un correo legítimo
-        return { valido: true, mensaje: "Correo aprobado." };
-
-    } catch (error) {
-        console.log("Error al consultar la API de correos:", error);
-        // Si por alguna razón la red falla, dejamos pasar al usuario para no arruinar su experiencia
-        return { valido: true, mensaje: "Aprobado por fallback." };
-    }
-}
 function mostrarMensaje(texto, tipo = "error") {
     const mensaje = document.getElementById("mensaje");
 
@@ -51,9 +23,13 @@ function mostrarMensajeVerificacion(texto, tipo = "error") {
     mensaje.style.color = tipo === "ok" ? "#86efac" : "#ffb4b8";
 }
 
+/* ==========================================
+   VALIDACIONES FRONTEND
+========================================== */
 function validarCorreo(correo) {
-    const expresion = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    return expresion.test(correo);
+    // Validación de formato estricto (Rechaza errores de tipeo y formatos inválidos)
+    const regex = /^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]+)*$/;
+    return regex.test(correo);
 }
 
 function validarNombre(nombre) {
@@ -74,6 +50,9 @@ function validarPassword(password) {
     };
 }
 
+/* ==========================================
+   UI CONTRASEÑA Y FORTALEZA
+========================================== */
 function visualizarPasswordRegistro() {
     const passwordInput = document.getElementById("password");
     const boton = document.querySelector(".password-toggle");
@@ -173,6 +152,9 @@ function actualizarReglasPassword() {
     }
 }
 
+/* ==========================================
+   MODAL DE VERIFICACIÓN
+========================================== */
 function abrirModalVerificacion() {
     const codigoVerificacion = document.getElementById("codigoVerificacion");
     const modalVerificacion = document.getElementById("modalVerificacion");
@@ -196,11 +178,15 @@ function cerrarModalVerificacion() {
     }
 }
 
+/* ==========================================
+   PROCESO DE REGISTRO
+========================================== */
 async function registrarUsuario() {
     const nombre = document.getElementById("nombre").value.trim();
     const correo = document.getElementById("correo").value.trim();
     const password = document.getElementById("password").value.trim();
 
+    // 1. Validaciones básicas en el navegador
     if (!nombre || !correo || !password) {
         mostrarMensaje("Completa todos los campos");
         return;
@@ -212,7 +198,7 @@ async function registrarUsuario() {
     }
 
     if (!validarCorreo(correo)) {
-        mostrarMensaje("Ingresa un correo electrónico válido");
+        mostrarMensaje("Ingresa un correo electrónico con formato válido");
         return;
     }
 
@@ -223,6 +209,7 @@ async function registrarUsuario() {
         return;
     }
 
+    // 2. Preparación UI
     const btnRegistro = document.getElementById("btnRegistro") || document.querySelector(".btn-full");
     const textoOriginal = btnRegistro ? btnRegistro.innerText : "Crear cuenta";
 
@@ -231,8 +218,9 @@ async function registrarUsuario() {
         btnRegistro.disabled = true;
     }
 
-    mostrarMensaje("Enviando código de verificación al correo...", "ok");
+    mostrarMensaje("Validando correo y enviando código...", "ok");
 
+    // 3. Envío al servidor (Backend se encarga de la validación DNS profunda)
     try {
         const respuesta = await fetch(`${API_BASE}/registro`, {
             method: "POST",
@@ -275,6 +263,9 @@ async function registrarUsuario() {
     }
 }
 
+/* ==========================================
+   VERIFICACIÓN DE CÓDIGO
+========================================== */
 async function verificarCodigoRegistro() {
     const codigoIngresado = document.getElementById("codigoVerificacion").value.trim();
 
@@ -302,6 +293,7 @@ async function verificarCodigoRegistro() {
             return;
         }
 
+        // Limpieza de datos antiguos e inicio de sesión
         localStorage.setItem("usuario_id", datos.usuario.id);
         localStorage.setItem("nombre_usuario", datos.usuario.nombre);
         localStorage.removeItem("perfil_id");
@@ -320,6 +312,9 @@ async function verificarCodigoRegistro() {
     }
 }
 
+/* ==========================================
+   EVENTOS
+========================================== */
 document.addEventListener("DOMContentLoaded", () => {
     const inputNombre = document.getElementById("nombre");
 
