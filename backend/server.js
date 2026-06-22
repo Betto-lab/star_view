@@ -1623,11 +1623,13 @@ app.get("/recomendaciones/historial/:perfil_id", (req, res) => {
     );
 });
 /* =========================
-   SERVIDOR
+   SERVIDOR lo pongo en comentario porque cambiare a vercel
 ========================= */
 
-const PORT = process.env.PORT || 3000;
+//const PORT = process.env.PORT || 3000;
 
-app.listen(PORT, () => {
-    console.log(`Servidor iniciado en puerto ${PORT}`);
-});
+//app.listen(PORT, () => {
+//    console.log(`Servidor iniciado en puerto ${PORT}`);
+//});
+
+module.exports = app;
