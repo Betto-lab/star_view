@@ -9,7 +9,8 @@
 <body class="app-body">
 
 <header class="topbar app-topbar">
-    <div class="brand">STAR<span>VIEW</span></div>
+    <!-- CORRECCIÓN: El logo ahora es un enlace al home -->
+    <a href="home.html" class="brand" style="text-decoration: none;">STAR<span>VIEW</span></a>
 
     <nav class="nav">
         <a href="index.html" onclick="cerrarSesion()">Cerrar sesión</a>
@@ -23,12 +24,14 @@
         Cada perfil mantiene su propia lista, historial y contraseña de acceso.
     </p>
 
+    <!-- Aquí se inyectan los perfiles y el nuevo círculo "+" desde el JS -->
     <div id="perfilesContainer" class="perfiles-container"></div>
+</main>
 
- 
-
-    <section id="formPerfil" class="perfil-form-card">
-        <h2>Nuevo perfil</h2>
+<!-- NUEVO: El formulario ahora es una ventana modal (flotante) -->
+<div id="formPerfil" class="modal-overlay">
+    <section class="modal-card">
+        <h2>Configurar perfil</h2>
 
         <label for="nombrePerfil">Nombre del perfil</label>
         <input type="text" id="nombrePerfil" placeholder="Ejemplo: Jesús">
@@ -69,19 +72,21 @@
         <label for="confirmarPasswordPerfil">Confirmar contraseña</label>
         <input type="password" id="confirmarPasswordPerfil" placeholder="Repite la contraseña">
 
-        <label class="checkbox-line">
+        <label class="checkbox-line" style="margin-top: 15px;">
             <input type="checkbox" id="infantilPerfil">
             Perfil infantil
         </label>
 
-        <button class="btn btn-primary btn-full" onclick="crearPerfil()">
-            Crear perfil
-        </button>
-
         <p id="mensajePerfil" class="mensaje"></p>
-    </section>
-</main>
 
+        <div class="modal-actions">
+            <button class="btn btn-secondary" onclick="document.getElementById('formPerfil').classList.remove('show')">Cancelar</button>
+            <button class="btn btn-primary" onclick="crearPerfil()">Guardar perfil</button>
+        </div>
+    </section>
+</div>
+
+<!-- Modal para ingresar el PIN -->
 <div id="modalClavePerfil" class="modal-overlay">
     <section class="modal-card">
         <p class="eyebrow">Acceso de perfil</p>
@@ -112,6 +117,7 @@
     </section>
 </div>
 
+<!-- Modal para recuperar la contraseña del perfil -->
 <div id="modalRecuperarPerfil" class="modal-overlay">
     <section class="modal-card">
         <p class="eyebrow">Recuperar perfil</p>

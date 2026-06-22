@@ -48,8 +48,7 @@ function mostrarMensajeRecuperar(texto, tipo = "error") {
 }
 
 function mostrarFormularioPerfil() {
-    const form = document.getElementById("formPerfil");
-
+    const form = document.getElementById('formularioPerfil').style.display = 'flex';
     if (form) {
         form.classList.toggle("show");
     }
@@ -145,11 +144,16 @@ async function cargarPerfiles() {
             perfiles.forEach(perfil => {
                 const card = document.createElement("article");
                 card.className = "perfil-card";
+                
+                // NUEVO: El clic ahora está en toda la tarjeta
+                card.style.cursor = "pointer";
+                card.setAttribute("onclick", `abrirModalClavePerfil({"id": ${perfil.id}, "nombre": "${perfil.nombre}", "infantil": ${perfil.infantil}})`);
+
                 card.innerHTML = `
-                    <div class="perfil-avatar" style="overflow: hidden; background: transparent; cursor: pointer;" onclick='abrirModalClavePerfil({"id": ${perfil.id}, "nombre": "${perfil.nombre}", "infantil": ${perfil.infantil}})'>
+                    <div class="perfil-avatar" style="overflow: hidden; background: transparent;">
                         <img src="${obtenerRutaAvatar(perfil.avatar)}" alt="${perfil.nombre}" style="width: 100%; height: 100%; object-fit: cover; border-radius: 5px;">
                     </div>
-                    <h3 style="cursor: pointer;" onclick='abrirModalClavePerfil({"id": ${perfil.id}, "nombre": "${perfil.nombre}", "infantil": ${perfil.infantil}})'>${perfil.nombre} 🔒</h3>
+                    <h3>${perfil.nombre} 🔒</h3>
                     ${Number(perfil.infantil) === 1 ? `<span class="badge-kids" style="background:#e50914;color:#fff;padding:2px 5px;border-radius:4px;font-size:12px;margin-top:5px;display:inline-block;">Infantil</span>` : ""}
                 `;
                 contenedor.appendChild(card);

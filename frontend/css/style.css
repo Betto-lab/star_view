@@ -2137,14 +2137,13 @@ textarea:focus{
     font-size: 12px;
     font-weight: 800;
 }
-/* ===============================
-   MENÚ DESPLEGABLE TIPO NETFLIX
-================================ */
+/* Agrega padding-bottom a nav-perfil para crear el puente invisible */
 .nav-perfil {
     position: relative;
     display: inline-block;
     cursor: pointer;
     margin-left: 15px;
+    padding-bottom: 20px; /* <--- NUEVO: Puente invisible */
 }
 .nav-perfil-trigger {
     display: flex;
@@ -2166,6 +2165,7 @@ textarea:focus{
 .nav-perfil:hover .nav-perfil-arrow {
     transform: rotate(180deg);
 }
+/* Elimina el margin-top de dropdown-menu para que se pegue al puente */
 .dropdown-menu {
     position: absolute;
     top: 100%;
@@ -2178,7 +2178,7 @@ textarea:focus{
     display: none;
     flex-direction: column;
     box-shadow: 0 10px 40px rgba(0,0,0,0.6);
-    margin-top: 15px;
+    margin-top: 0; /* <--- CAMBIO: Antes decía 15px, cámbialo a 0 */
     z-index: 100;
 }
 .nav-perfil:hover .dropdown-menu {

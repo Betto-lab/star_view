@@ -9,14 +9,34 @@
 <body class="app-body">
 
 <header class="topbar app-topbar">
+    <!-- Logo funcional -->
     <a href="home.html" class="brand" style="text-decoration: none;">STAR<span>VIEW</span></a>
 
     <nav class="nav">
+        <!-- Opciones principales -->
         <a href="home.html">Inicio</a>
         <a href="mi-lista.html" class="activo">Mi Lista</a>
-        <a href="planes.html">Planes</a>
-        <a href="seleccionar-perfil.html">Cambiar perfil</a>
-        <a href="index.html" onclick="cerrarSesion()">Cerrar sesión</a>
+
+        <!-- Menú Desplegable del Perfil -->
+        <div class="nav-perfil">
+            <div class="nav-perfil-trigger">
+                <img src="img/Red.jpg" id="navAvatar" class="nav-perfil-avatar" alt="Perfil">
+                <span class="nav-perfil-arrow">▼</span>
+            </div>
+            <div class="dropdown-menu">
+                <div style="padding: 10px 20px; font-weight: bold; border-bottom: 1px solid rgba(255,255,255,0.1); margin-bottom: 5px;" id="navNombrePerfil">Cargando...</div>
+                
+                <button onclick="abrirEdicionPerfilActual()">✏️ Editar perfil</button>
+                <a href="seleccionar-perfil.html">👥 Cambiar de perfil</a>
+                <div class="dropdown-divider"></div>
+                <a href="planes.html">💳 Planes</a>
+                <a href="facturacion.html">📄 Facturación</a>
+                <a href="suscripcion.html">⭐ Suscripción</a>
+                <div class="dropdown-divider"></div>
+                <button onclick="cerrarSesion()">🚪 Cerrar sesión</button>
+                <button onclick="eliminarPerfilActual()" style="color: #ffb4b8; margin-top: 5px;">🗑️ Eliminar perfil</button>
+            </div>
+        </div>
     </nav>
 </header>
 
@@ -33,6 +53,34 @@
         <div id="miLista" class="catalogo"></div>
     </section>
 </main>
+
+<!-- Modal Editar Perfil Actual -->
+<div id="modalEditarPerfil" class="modal-overlay">
+    <section class="modal-card">
+        <h2>Editar perfil</h2>
+        
+        <label>Nombre</label>
+        <input type="text" id="editNombrePerfil">
+        
+        <label>Color de Avatar</label>
+        <select id="editAvatarPerfil" style="margin-bottom: 15px; width: 100%; padding: 12px; background: rgba(255,255,255,0.1); color: white; border: 1px solid rgba(255,255,255,0.2); border-radius: 8px; outline: none;">
+            <option value="Red.jpg" style="color: black;">Rojo</option>
+            <option value="Blue.jpg" style="color: black;">Azul</option>
+            <option value="Green.jpg" style="color: black;">Verde</option>
+            <option value="Yellow.jpg" style="color: black;">Amarillo</option>
+            <option value="Pink.jpg" style="color: black;">Rosa</option>
+        </select>
+
+        <label class="checkbox-line" style="margin-bottom: 20px;">
+            <input type="checkbox" id="editInfantilPerfil"> Perfil infantil
+        </label>
+
+        <div class="modal-actions">
+            <button class="btn btn-secondary" onclick="document.getElementById('modalEditarPerfil').classList.remove('show')">Cancelar</button>
+            <button class="btn btn-primary" onclick="guardarEdicionPerfilActual()">Guardar Cambios</button>
+        </div>
+    </section>
+</div>
 
 <script src="js/mi-lista.js"></script>
 </body>
