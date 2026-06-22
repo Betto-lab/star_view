@@ -1622,6 +1622,103 @@ app.get("/recomendaciones/historial/:perfil_id", (req, res) => {
         }
     );
 });
+
+/* =========================================
+   CONTROL DE PANTALLAS SIMULTÁNEAS Y CALIDAD
+========================================= */
+
+// 1. Verificar disponibilidad e iniciar reproducción
+app.post("/api/stream/iniciar", (req, res) => {
+    const { usuario_id, dispositivo_token } = req.body;
+
+    if (!usuario_id || !dispositivo_token) {
+        return res.json({ ok: false, mensaje: "Faltan datos de sesión." });
+    }
+
+    // Limpieza: Eliminamos dispositivos inactivos por más de 1 minuto
+    const tiempoLimite = new Date(Date.now() - 60 * 1000); 
+    conexion.query(
+        "DELETE FROM reproducciones_activas WHERE ultima_actividad < ?",
+        [tiempoLimite],
+        (errLimpieza) => {
+            if (errLimpieza) console.error("Error limpiando sesiones:", errLimpieza);
+
+            // Consultamos el plan del usuario usando tus nombres de columnas exactos
+            conexion.query(
+                `SELECT s.estado, p.pantallas, p.calidad 
+                 FROM suscripciones s
+                 INNER JOIN planes p ON s.plan_id = p.id
+                 WHERE s.usuario_id = ? AND s.estado = 'activa'
+                 ORDER BY s.id DESC LIMIT 1`,
+                [usuario_id],
+                (error, suscripcion) => {
+                    if (error || suscripcion.length === 0) {
+                        return res.json({ ok: false, mensaje: "No tienes una suscripción activa." });
+                    }
+
+                    const limites = suscripcion[0];
+
+                    // Contamos cuántas pantallas distintas están activas
+                    conexion.query(
+                        "SELECT dispositivo_token FROM reproducciones_activas WHERE usuario_id = ?",
+                        [usuario_id],
+                        (errContador, activas) => {
+                            if (errContador) return res.json({ ok: false, mensaje: "Error de servidor." });
+
+                            const yaEstaReproduciendo = activas.some(a => a.dispositivo_token === dispositivo_token);
+
+                            // Si excede el límite (1, 2 o 4 pantallas) bloqueamos
+                            if (activas.length >= limites.pantallas && !yaEstaReproduciendo) {
+                                return res.json({ 
+                                    ok: false, 
+                                    limiteExcedido: true,
+                                    mensaje: `Tu plan solo permite ${limites.pantallas} pantalla(s) en simultáneo.` 
+                                });
+                            }
+
+                            // Registramos o actualizamos la pantalla
+                            conexion.query(
+                                `INSERT INTO reproducciones_activas (usuario_id, dispositivo_token, ultima_actividad) 
+                                 VALUES (?, ?, NOW()) 
+                                 ON DUPLICATE KEY UPDATE ultima_actividad = NOW()`,
+                                [usuario_id, dispositivo_token],
+                                (errInsert) => {
+                                    if (errInsert) return res.json({ ok: false, mensaje: "Error al registrar pantalla." });
+                                    
+                                    res.json({ 
+                                        ok: true, 
+                                        calidad_maxima: limites.calidad, // "HD", "Full HD" o "Ultra HD"
+                                        mensaje: "Streaming autorizado." 
+                                    });
+                                }
+                            );
+                        }
+                    );
+                }
+            );
+        }
+    );
+});
+
+// 2. Ping constante para mantener el dispositivo "vivo"
+app.post("/api/stream/ping", (req, res) => {
+    const { usuario_id, dispositivo_token } = req.body;
+    conexion.query(
+        "UPDATE reproducciones_activas SET ultima_actividad = NOW() WHERE usuario_id = ? AND dispositivo_token = ?",
+        [usuario_id, dispositivo_token],
+        () => res.json({ ok: true })
+    );
+});
+
+// 3. Quitar dispositivo al salir del reproductor
+app.post("/api/stream/cerrar", (req, res) => {
+    const { usuario_id, dispositivo_token } = req.body;
+    conexion.query(
+        "DELETE FROM reproducciones_activas WHERE usuario_id = ? AND dispositivo_token = ?",
+        [usuario_id, dispositivo_token],
+        () => res.json({ ok: true, mensaje: "Pantalla liberada." })
+    );
+});
 /* =========================
    SERVIDOR lo pongo en comentario porque cambiare a vercel
 ========================= */
