@@ -519,4 +519,21 @@ document.addEventListener("keydown", (event) => {
             cerrarModalClavePerfil();
         }
     }
-});
+})
+// ==========================================
+// ABRIR FORMULARIO DE NUEVO PERFIL
+// ==========================================
+function mostrarFormularioPerfil() {
+    // 1. Limpiamos los campos por si se quedó escrito algo de antes
+    document.getElementById("nombrePerfil").value = "";
+    document.getElementById("passwordPerfil").value = "";
+    document.getElementById("confirmarPasswordPerfil").value = "";
+    document.getElementById("infantilPerfil").checked = false;
+    
+    // 2. Mostramos la ventana flotante
+    const modal = document.getElementById("formPerfil");
+    if (modal) {
+        modal.classList.add("show");
+    }
+}
+;

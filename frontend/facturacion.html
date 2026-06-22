@@ -14,10 +14,23 @@
     <nav class="nav">
         <a href="home.html">Inicio</a>
         <a href="mi-lista.html">Mi Lista</a>
-        <a href="planes.html">Planes</a>
-        <a href="facturacion.html" class="activo">Facturación</a>
-        <a href="suscripcion.html">Suscripción</a>
-        <a href="index.html" onclick="cerrarSesion()">Cerrar sesión</a>
+
+        <div class="nav-perfil">
+            <div class="nav-perfil-trigger">
+                <img src="img/Red.jpg" id="navAvatar" class="nav-perfil-avatar" alt="Perfil">
+                <span class="nav-perfil-arrow">▼</span>
+            </div>
+            <div class="dropdown-menu">
+                <div style="padding: 10px 20px; font-weight: bold; border-bottom: 1px solid rgba(255,255,255,0.1); margin-bottom: 5px;" id="navNombrePerfil">Cargando...</div>
+                <a href="seleccionar-perfil.html">👥 Cambiar de perfil</a>
+                <div class="dropdown-divider"></div>
+                <a href="planes.html">💳 Planes</a>
+                <a href="facturacion.html">📄 Facturación</a>
+                <a href="suscripcion.html">⭐ Suscripción</a>
+                <div class="dropdown-divider"></div>
+                <button onclick="cerrarSesion()">🚪 Cerrar sesión</button>
+            </div>
+        </div>
     </nav>
 </header>
 
@@ -45,5 +58,24 @@
 </main>
 
 <script src="js/facturacion.js"></script>
+<script>
+    // Cargar foto y nombre en la barra superior
+    document.addEventListener("DOMContentLoaded", async () => {
+        const usuario_id = localStorage.getItem("usuario_id") || sessionStorage.getItem("usuario_id");
+        const perfil_id = localStorage.getItem("perfil_id") || sessionStorage.getItem("perfil_id");
+        if (!usuario_id || !perfil_id) return;
+
+        try {
+            const res = await fetch(`${window.location.origin}/perfiles/${usuario_id}`);
+            const perfiles = await res.json();
+            const actual = perfiles.find(p => String(p.id) === String(perfil_id));
+            if (actual) {
+                const img = actual.avatar.includes('.') ? actual.avatar : actual.avatar + '.jpg';
+                document.getElementById("navAvatar").src = `img/${img}`;
+                document.getElementById("navNombrePerfil").innerText = actual.nombre;
+            }
+        } catch(e) {}
+    });
+</script>
 </body>
 </html>
