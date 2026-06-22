@@ -2,16 +2,30 @@ const API_BASE = window.location.origin;
 const parametros = new URLSearchParams(window.location.search);
 const contenido_id = parametros.get("id");
 const perfil_id = (localStorage.getItem("perfil_id") || sessionStorage.getItem("perfil_id"));
+const usuario_id = (localStorage.getItem("usuario_id") || sessionStorage.getItem("usuario_id"));
+const dispositivoToken = obtenerDispositivoToken();
 
 let contenidoActual = null;
 let guardandoProgreso = false;
 let ultimoGuardadoSegundo = 0;
 let intervaloGuardado = null;
+let intervaloHeartbeat = null;
 let restaurando = true; 
 let minutoGuardadoGlobal = 0;
 
+/* =========================================
+   PROTECCIÓN Y TOKENS
+========================================= */
+function obtenerDispositivoToken() {
+    let token = localStorage.getItem("starview_device_token");
+    if (!token) {
+        token = "dev_" + Math.random().toString(36).substring(2, 15) + Date.now().toString(36);
+        localStorage.setItem("starview_device_token", token);
+    }
+    return token;
+}
+
 function protegerPerfil() {
-    const usuario_id = (localStorage.getItem("usuario_id") || sessionStorage.getItem("usuario_id"));
     if (!usuario_id || usuario_id === "undefined" || usuario_id === "null") {
         localStorage.clear(); sessionStorage.clear();
         window.location.href = "login.html";
@@ -28,6 +42,9 @@ function protegerPerfil() {
     return true;
 }
 
+/* =========================================
+   FORMATEADORES Y UTILIDADES VISUALES
+========================================= */
 function normalizarImagen(imagen) {
     if (!imagen) return "img/backdrop.jpg";
     if (imagen.startsWith("http") || imagen.startsWith("img/")) return imagen;
@@ -39,15 +56,6 @@ function aplicarHeroVisual(contenido) {
     if (!hero) return;
     const fondo = contenido.fondo || contenido.imagen || "backdrop.jpg";
     hero.style.backgroundImage = `url('${normalizarImagen(fondo)}')`;
-}
-
-function reproducirVideo() {
-    const video = document.getElementById("videoPlayer");
-    const btnPlayPause = document.getElementById("btnPlayPause");
-    if (!video) return;
-    video.play();
-    if (btnPlayPause) btnPlayPause.innerText = "⏸ Pausa";
-    video.scrollIntoView({ behavior: "smooth", block: "center" });
 }
 
 function escapeHTML(texto) {
@@ -74,6 +82,9 @@ function actualizarDisplayTiempo(video) {
     if (total && video && video.duration) total.innerText = formatearTiempo(video.duration);
 }
 
+/* =========================================
+   GESTIÓN DE HISTORIAL Y PROGRESO
+========================================= */
 function registrarHistorialInicial() {
     if (!perfil_id || !contenido_id) return;
     fetch(`${API_BASE}/historial`, {
@@ -92,88 +103,6 @@ async function obtenerProgresoGuardadoSeguro() {
         if (!progreso) return 0;
         return Number(progreso.minuto_actual || 0);
     } catch (error) { return 0; }
-}
-
-async function cargarContenido() {
-    if (!protegerPerfil()) return;
-
-    try {
-        registrarHistorialInicial();
-
-        const [respuestaContenido, minutoGuardado] = await Promise.all([
-            fetch(`${API_BASE}/contenido/${contenido_id}`),
-            obtenerProgresoGuardadoSeguro()
-        ]);
-
-        minutoGuardadoGlobal = minutoGuardado;
-
-        const contenido = await respuestaContenido.json();
-
-        if (!contenido || !contenido.id) {
-            window.location.href = "home.html";
-            return;
-        }
-
-        document.getElementById("tituloContenido").innerText = contenido.titulo || "Sin título";
-        document.getElementById("tipoContenido").innerText = contenido.tipo || "Contenido";
-        document.getElementById("generoContenido").innerText = contenido.genero || "Sin género";
-        document.getElementById("descripcionContenido").innerText = contenido.descripcion || "Sin descripción disponible.";
-
-        aplicarHeroVisual(contenido);
-        const video = document.getElementById("videoPlayer");
-
-        // CONFIGURACIÓN DINÁMICA DE AUDIO Y SUBTÍTULOS
-        const listaAudio = document.getElementById("listaAudio");
-        const listaSubtitulos = document.getElementById("listaSubtitulos");
-
-        const idiomaBD = contenido.idioma_audio || "Español (Latino)";
-        if (listaAudio) {
-            listaAudio.innerHTML = `<li class="activo">${escapeHTML(idiomaBD)}</li>`;
-        }
-
-        video.innerHTML = `<source src="${contenido.video_url || 'videos/demo.mp4'}" type="video/mp4">Tu navegador no soporta video.`;
-
-        if (contenido.subtitulo_url && listaSubtitulos) {
-            const track = document.createElement("track");
-            track.id = "pistaSubtitulos";
-            track.kind = "subtitles";
-            track.src = contenido.subtitulo_url;
-            track.srclang = "es";
-            track.label = "Español";
-            video.appendChild(track);
-
-            listaSubtitulos.innerHTML = `
-                <li data-estado="apagado" class="activo">Apagado</li>
-                <li data-estado="encendido">Español</li>
-            `;
-            
-            setTimeout(() => {
-                if (video.textTracks && video.textTracks.length > 0) {
-                    video.textTracks[0].mode = "hidden";
-                }
-            }, 100);
-        } else if (listaSubtitulos) {
-            listaSubtitulos.innerHTML = `
-                <li data-estado="apagado" class="activo">Apagado</li>
-                <li class="inactivo">No disponibles</li>
-            `;
-        }
-
-        video.poster = normalizarImagen(contenido.fondo || contenido.imagen);
-        video.load();
-
-        video.addEventListener("loadedmetadata", () => {
-            if (minutoGuardadoGlobal > 2 && minutoGuardadoGlobal < video.duration - 5) {
-                video.currentTime = minutoGuardadoGlobal;
-                ultimoGuardadoSegundo = minutoGuardadoGlobal;
-            }
-            actualizarDisplayTiempo(video);
-            restaurando = false; 
-        }, { once: true });
-
-        if (contenido.genero) cargarRecomendacionesLocales(contenido.genero, contenido.id);
-
-    } catch (error) { console.log(error); }
 }
 
 async function guardarProgreso(video, forzar = false) {
@@ -226,7 +155,126 @@ async function marcarVistoAutomatico() {
     } catch (error) { }
 }
 
-function inicializarVideo() {
+/* =========================================
+   CARGA PRINCIPAL (CON VALIDACIÓN DE PANTALLAS)
+========================================= */
+async function cargarContenido() {
+    if (!protegerPerfil()) return;
+
+    try {
+        // 1. CONTROL DE PANTALLAS SIMULTÁNEAS ANTES DE MOSTRAR LA PELÍCULA
+        const respuestaStream = await fetch(`${API_BASE}/api/stream/iniciar`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ usuario_id: usuario_id, dispositivo_token: dispositivoToken })
+        });
+
+        const datosStream = await respuestaStream.json();
+
+        if (!datosStream.ok) {
+            alert(datosStream.mensaje);
+            window.location.replace("home.html"); // Te expulsa al Home seguro si superas las pantallas permitidas
+            return;
+        }
+
+        // 2. Si el streaming está autorizado, cargamos el historial y datos
+        registrarHistorialInicial();
+
+        const [respuestaContenido, minutoGuardado] = await Promise.all([
+            fetch(`${API_BASE}/contenido/${contenido_id}`),
+            obtenerProgresoGuardadoSeguro()
+        ]);
+
+        minutoGuardadoGlobal = minutoGuardado;
+        contenidoActual = await respuestaContenido.json();
+
+        if (!contenidoActual || !contenidoActual.id) {
+            window.location.href = "home.html";
+            return;
+        }
+
+        // Renderizar textos
+        document.getElementById("tituloContenido").innerText = contenidoActual.titulo || "Sin título";
+        document.getElementById("tipoContenido").innerText = contenidoActual.tipo || "Contenido";
+        document.getElementById("generoContenido").innerText = contenidoActual.genero || "Sin género";
+        document.getElementById("descripcionContenido").innerText = contenidoActual.descripcion || "Sin descripción disponible.";
+
+        aplicarHeroVisual(contenidoActual);
+        const video = document.getElementById("videoPlayer");
+
+        // Configuración de audio
+        const listaAudio = document.getElementById("listaAudio");
+        const listaSubtitulos = document.getElementById("listaSubtitulos");
+
+        const idiomaBD = contenidoActual.idioma_audio || "Español (Latino)";
+        if (listaAudio) {
+            listaAudio.innerHTML = `<li class="activo">${escapeHTML(idiomaBD)}</li>`;
+        }
+
+        video.innerHTML = `<source src="${contenidoActual.video_url || 'videos/demo.mp4'}" type="video/mp4">Tu navegador no soporta video.`;
+
+        if (contenidoActual.subtitulo_url && listaSubtitulos) {
+            const track = document.createElement("track");
+            track.id = "pistaSubtitulos";
+            track.kind = "subtitles";
+            track.src = contenidoActual.subtitulo_url;
+            track.srclang = "es";
+            track.label = "Español";
+            video.appendChild(track);
+
+            listaSubtitulos.innerHTML = `
+                <li data-estado="apagado" class="activo">Apagado</li>
+                <li data-estado="encendido">Español</li>
+            `;
+            
+            setTimeout(() => {
+                if (video.textTracks && video.textTracks.length > 0) {
+                    video.textTracks[0].mode = "hidden";
+                }
+            }, 100);
+        } else if (listaSubtitulos) {
+            listaSubtitulos.innerHTML = `
+                <li data-estado="apagado" class="activo">Apagado</li>
+                <li class="inactivo">No disponibles</li>
+            `;
+        }
+
+        video.poster = normalizarImagen(contenidoActual.fondo || contenidoActual.imagen);
+        video.load();
+
+        video.addEventListener("loadedmetadata", () => {
+            if (minutoGuardadoGlobal > 2 && minutoGuardadoGlobal < video.duration - 5) {
+                video.currentTime = minutoGuardadoGlobal;
+                ultimoGuardadoSegundo = minutoGuardadoGlobal;
+            }
+            actualizarDisplayTiempo(video);
+            restaurando = false; 
+        }, { once: true });
+
+        // 3. Configurar el limitador de calidad del plan obtenido
+        configurarSelectorCalidad(datosStream.calidad_maxima);
+
+        // 4. Activar el Heartbeat cada 30 segundos para avisar que seguimos viendo la película
+        intervaloHeartbeat = setInterval(async () => {
+            await fetch(`${API_BASE}/api/stream/ping`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ usuario_id: usuario_id, dispositivo_token: dispositivoToken })
+            });
+        }, 30000);
+
+        if (contenidoActual.genero) cargarRecomendacionesLocales(contenidoActual.genero, contenidoActual.id);
+
+        // 5. Inicializar todos los botones y controles interactivos
+        inicializarControlesPlayer();
+
+    } catch (error) { console.log(error); }
+}
+
+/* =========================================
+   CONTROLES NATIVOS INTERACTIVOS DEL REPRODUCTOR
+========================================= */
+function inicializarControlesPlayer() {
     const video = document.getElementById("videoPlayer");
     const contenedor = document.getElementById("videoContenedor");
     const btnPlayPause = document.getElementById("btnPlayPause");
@@ -349,30 +397,21 @@ function inicializarVideo() {
 
     btnPantallaCompleta.addEventListener("click", async () => {
         try {
-            // Si NO está en pantalla completa
             if (!document.fullscreenElement && !document.webkitFullscreenElement) {
-                
-                // 1. Entrar a pantalla completa (compatible con todos los navegadores)
                 if (contenedor.requestFullscreen) {
                     await contenedor.requestFullscreen();
                 } else if (contenedor.webkitRequestFullscreen) {
                     await contenedor.webkitRequestFullscreen();
                 }
-                
-                // 2. FORZAR MODO HORIZONTAL (Landscape) EN CELULARES
                 if (screen.orientation && screen.orientation.lock) {
-                    await screen.orientation.lock("landscape").catch(e => console.log("Giro automático no soportado:", e));
+                    await screen.orientation.lock("landscape").catch(e => console.log("Giro no soportado:", e));
                 }
-
             } else {
-                // Si YA ESTÁ en pantalla completa, salimos
                 if (document.exitFullscreen) {
                     await document.exitFullscreen();
                 } else if (document.webkitExitFullscreen) {
                     await document.webkitExitFullscreen();
                 }
-                
-                // 3. Liberar la rotación del celular para que vuelva a vertical
                 if (screen.orientation && screen.orientation.unlock) {
                     screen.orientation.unlock();
                 }
@@ -394,9 +433,7 @@ function inicializarVideo() {
         }
     });
 
-    video.addEventListener("seeked", () => {
-        guardarProgreso(video, true);
-    });
+    video.addEventListener("seeked", () => { guardarProgreso(video, true); });
 
     barraProgreso.addEventListener("input", e => {
         if (!video.duration) return;
@@ -416,16 +453,63 @@ function inicializarVideo() {
     intervaloGuardado = setInterval(() => {
         if (!video.paused && !video.ended) guardarProgreso(video);
     }, 1000); 
+}
 
-    document.addEventListener("visibilitychange", () => { if (document.hidden) guardarProgresoRapido(); });
-    window.addEventListener("beforeunload", () => guardarProgresoRapido());
-    
-    const enlacesSalida = document.querySelectorAll('a[href="home.html"]');
-    enlacesSalida.forEach(enlace => {
-        enlace.addEventListener("click", () => guardarProgresoRapido());
+/* =========================================
+   SELECTOR Y GESTIÓN DE CALIDADES
+========================================= */
+function configurarSelectorCalidad(calidadMaxima) {
+    const selector = document.getElementById("selectCalidad"); 
+    if (!selector) return;
+
+    selector.innerHTML = ""; 
+
+    const opciones = [
+        { texto: "HD (720p)", valor: "HD", orden: 1 },
+        { texto: "Full HD (1080p)", valor: "Full HD", orden: 2 },
+        { texto: "Ultra HD (4K)", valor: "Ultra HD", orden: 3 }
+    ];
+
+    let ordenMaximo = 1;
+    if (calidadMaxima === "Full HD") ordenMaximo = 2;
+    if (calidadMaxima === "Ultra HD") ordenMaximo = 3;
+
+    opciones.forEach(opcion => {
+        if (opcion.orden <= ordenMaximo) {
+            const elOpt = document.createElement("option");
+            elOpt.value = opcion.valor;
+            elOpt.innerText = opcion.texto;
+            selector.appendChild(elOpt);
+        }
+    });
+
+    selector.addEventListener("change", function() {
+        cambiarFuenteVideoPorCalidad(this.value);
     });
 }
 
+function cambiarFuenteVideoPorCalidad(calidad) {
+    const videoPlayer = document.getElementById("videoPlayer"); // ID Corregido a videoPlayer
+    if (!videoPlayer) return;
+
+    const tiempoActual = videoPlayer.currentTime; 
+
+    // Ajusta las fuentes de tus archivos de video según la calidad elegida
+    if (calidad === "Ultra HD") {
+        videoPlayer.src = contenidoActual?.video_url_4k || contenidoActual?.video_url || "videos/demo.mp4";
+    } else if (calidad === "Full HD") {
+        videoPlayer.src = contenidoActual?.video_url_1080p || contenidoActual?.video_url || "videos/demo.mp4";
+    } else {
+        videoPlayer.src = contenidoActual?.video_url || "videos/demo.mp4";
+    }
+
+    videoPlayer.currentTime = tiempoActual; 
+    videoPlayer.play();
+}
+
+/* =========================================
+   RECOMENDACIONES Y EVENTOS DE CIERRE
+========================================= */
 async function cargarRecomendacionesLocales(genero, idActual) {
     try {
         const generoSeguro = encodeURIComponent(genero);
@@ -451,5 +535,22 @@ async function cargarRecomendacionesLocales(genero, idActual) {
     } catch (error) { console.log(error); }
 }
 
-cargarContenido();
-inicializarVideo();
+// Liberación del dispositivo al cerrar la pestaña o retroceder
+window.addEventListener("beforeunload", () => {
+    if (intervaloHeartbeat) clearInterval(intervaloHeartbeat);
+    guardarProgresoRapido();
+    
+    const datosCierre = JSON.stringify({ usuario_id: usuario_id, dispositivo_token: dispositivoToken });
+    navigator.sendBeacon(`${API_BASE}/api/stream/cerrar`, datosCierre);
+});
+
+document.addEventListener("visibilitychange", () => { if (document.hidden) guardarProgresoRapido(); });
+
+document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+        guardarProgresoRapido();
+    }
+});
+
+// Inicialización controlada al cargar el DOM
+document.addEventListener("DOMContentLoaded", cargarContenido);
