@@ -54,6 +54,20 @@
         </div>
     </section>
 </main>
-
+<script>
+    // Si entra al landing page pero ya está logueado, lo manda a perfiles
+    document.addEventListener("DOMContentLoaded", () => {
+        if ((localStorage.getItem("usuario_id") || sessionStorage.getItem("usuario_id"))) {
+            window.location.href = "seleccionar-perfil.html";
+        }
+    });
+</script>
+<script>
+    document.addEventListener("DOMContentLoaded", () => {
+        if (localStorage.getItem("usuario_id") || sessionStorage.getItem("usuario_id")) {
+            window.location.href = "seleccionar-perfil.html";
+        }
+    });
+</script>
 </body>
 </html>

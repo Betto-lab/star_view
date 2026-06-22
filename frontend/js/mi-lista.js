@@ -1,14 +1,14 @@
 const API_BASE = window.location.origin;
 function cerrarSesion() {
-    localStorage.clear();
+    localStorage.clear(); sessionStorage.clear();
 }
 
 function obtenerPerfilId() {
-    return localStorage.getItem("perfil_id");
+    return (localStorage.getItem("perfil_id") || sessionStorage.getItem("perfil_id"));
 }
 
 function protegerPerfil() {
-    const usuario_id = localStorage.getItem("usuario_id");
+    const usuario_id = (localStorage.getItem("usuario_id") || sessionStorage.getItem("usuario_id"));
     const perfil_id = obtenerPerfilId();
 
     if (!usuario_id) {

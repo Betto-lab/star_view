@@ -1,12 +1,12 @@
 const API_BASE = window.location.origin;
 
 function cerrarSesion() {
-    localStorage.clear();
+    localStorage.clear(); sessionStorage.clear();
     window.location.href = "index.html";
 }
 
 function obtenerUsuarioId() {
-    const usuario_id = localStorage.getItem("usuario_id");
+    const usuario_id = (localStorage.getItem("usuario_id") || sessionStorage.getItem("usuario_id"));
 
     if (!usuario_id || usuario_id === "undefined" || usuario_id === "null") {
         localStorage.removeItem("usuario_id");

@@ -3,7 +3,7 @@ const API_BASE = window.location.origin;
 let catalogo = [];
 
 function esPerfilInfantilActivo() {
-    return localStorage.getItem("perfil_infantil") === "1" ||
+    return (localStorage.getItem("perfil_infantil") || sessionStorage.getItem("perfil_infantil")) === "1" ||
            localStorage.getItem("control_parental") === "1" ||
            localStorage.getItem("control_parental") === "true";
 }
@@ -37,16 +37,16 @@ function mostrarToast(texto, tipo = "info") {
 }
 
 function cerrarSesion() {
-    localStorage.clear();
+    localStorage.clear(); sessionStorage.clear();
     window.location.href = "index.html";
 }
 
 function obtenerPerfilId() {
-    return localStorage.getItem("perfil_id");
+    return (localStorage.getItem("perfil_id") || sessionStorage.getItem("perfil_id"));
 }
 
 async function verificarAccesoCatalogo() {
-    const usuarioId = localStorage.getItem("usuario_id");
+    const usuarioId = (localStorage.getItem("usuario_id") || sessionStorage.getItem("usuario_id"));
 
     if (!usuarioId || usuarioId === "undefined" || usuarioId === "null") {
         localStorage.removeItem("usuario_id");
@@ -74,7 +74,7 @@ async function verificarAccesoCatalogo() {
 }
 
 function protegerPerfil() {
-    const usuario_id = localStorage.getItem("usuario_id");
+    const usuario_id = (localStorage.getItem("usuario_id") || sessionStorage.getItem("usuario_id"));
     const perfil_id = obtenerPerfilId();
 
     if (!usuario_id || usuario_id === "undefined" || usuario_id === "null") {

@@ -4,15 +4,15 @@ let perfilPendiente = null;
 let perfilRecuperacion = null;
 
 function cerrarSesion() {
-    localStorage.clear();
+    localStorage.clear(); sessionStorage.clear();
     window.location.href = "index.html";
 }
 
 function obtenerUsuarioId() {
-    const usuario_id = localStorage.getItem("usuario_id");
+    const usuario_id = (localStorage.getItem("usuario_id") || sessionStorage.getItem("usuario_id"));
 
     if (!usuario_id || usuario_id === "undefined" || usuario_id === "null") {
-        localStorage.clear();
+        localStorage.clear(); sessionStorage.clear();
         window.location.href = "login.html";
         return null;
     }
@@ -310,7 +310,18 @@ async function validarIngresoPerfil() {
 async function validarIngresoBackend(perfil_id, pin, perfil_nombre) {
     const usuario_id = obtenerUsuarioId();
 
+    // Éxito: Guardamos la sesión en el mismo lugar que el usuario
+        if (sessionStorage.getItem("usuario_id")) {
+            sessionStorage.setItem("perfil_id", datos.perfil.id);
+            sessionStorage.setItem("perfil_nombre", datos.perfil.nombre);
+            sessionStorage.setItem("perfil_infantil", datos.perfil.infantil || 0);
+        } else {
+            localStorage.setItem("perfil_id", datos.perfil.id);
+            localStorage.setItem("perfil_nombre", datos.perfil.nombre);
+            localStorage.setItem("perfil_infantil", datos.perfil.infantil || 0);
+        }
     if (!usuario_id) return;
+    
 
     try {
         const respuesta = await fetch(`${API_BASE}/perfiles/verificar`, {

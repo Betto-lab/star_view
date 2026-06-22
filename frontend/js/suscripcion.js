@@ -1,8 +1,8 @@
 const API_BASE = window.location.origin;
-const usuario_id = localStorage.getItem("usuario_id");
+const usuario_id = (localStorage.getItem("usuario_id") || sessionStorage.getItem("usuario_id"));
 
 function cerrarSesion() {
-    localStorage.clear();
+    localStorage.clear(); sessionStorage.clear();
 }
 
 function protegerSesion() {

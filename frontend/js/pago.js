@@ -3,7 +3,7 @@ const API_BASE = window.location.origin;
 let metodoPagoSeleccionado = "Tarjeta simulada";
 
 function cerrarSesion() {
-    localStorage.clear();
+    localStorage.clear(); sessionStorage.clear();
     window.location.href = "index.html";
 }
 
@@ -17,7 +17,7 @@ function mostrarMensajePago(texto, tipo = "error") {
 }
 
 function validarAccesoPago() {
-    const usuario_id = localStorage.getItem("usuario_id");
+    const usuario_id = (localStorage.getItem("usuario_id") || sessionStorage.getItem("usuario_id"));
     const plan_id = localStorage.getItem("plan_id");
     const plan_precio = localStorage.getItem("plan_precio");
 
@@ -210,7 +210,7 @@ async function confirmarPago(event) {
     if (!validarAccesoPago()) return;
     if (!validarDatosPago()) return;
 
-    const usuario_id = localStorage.getItem("usuario_id");
+    const usuario_id = (localStorage.getItem("usuario_id") || sessionStorage.getItem("usuario_id"));
     const plan_id = localStorage.getItem("plan_id");
     const plan_precio = localStorage.getItem("plan_precio");
 

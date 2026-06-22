@@ -133,6 +133,25 @@ async function iniciarSesion() {
         }
         mostrarMensaje("No se pudo conectar con el servidor");
     }
+    // NUEVA LÓGICA DE CHECKBOX: Detecta si está marcado
+        const mantenerSesion = document.getElementById("mantenerSesion")?.checked;
+
+        if (mantenerSesion) {
+            // Se guarda permanente
+            localStorage.setItem("usuario_id", usuarioId);
+            localStorage.setItem("nombre_usuario", usuario.nombre || usuario.nombre_usuario || "");
+        } else {
+            // Se destruye al cerrar la pestaña
+            sessionStorage.setItem("usuario_id", usuarioId);
+            sessionStorage.setItem("nombre_usuario", usuario.nombre || usuario.nombre_usuario || "");
+        }
+
+        localStorage.removeItem("perfil_id");
+        localStorage.removeItem("perfil_nombre");
+        sessionStorage.removeItem("perfil_id");
+        sessionStorage.removeItem("perfil_nombre");
+
+        mostrarMensaje("Inicio de sesión correcto", "ok");
 }
 
 async function pedirCodigoCuenta() {
@@ -225,4 +244,12 @@ document.addEventListener("keydown", (event) => {
     if (event.key === "Escape") {
         cerrarRecuperacion();
     }
+})
+
+document.addEventListener("DOMContentLoaded", () => {
+    const usuario_id = localStorage.getItem("usuario_id") || sessionStorage.getItem("usuario_id");
+    if (usuario_id) {
+        window.location.href = "seleccionar-perfil.html";
+    }
 });
+;

@@ -1,7 +1,7 @@
 const API_BASE = window.location.origin;
 const parametros = new URLSearchParams(window.location.search);
 const contenido_id = parametros.get("id");
-const perfil_id = localStorage.getItem("perfil_id");
+const perfil_id = (localStorage.getItem("perfil_id") || sessionStorage.getItem("perfil_id"));
 
 let contenidoActual = null;
 let guardandoProgreso = false;
@@ -11,9 +11,9 @@ let restaurando = true;
 let minutoGuardadoGlobal = 0;
 
 function protegerPerfil() {
-    const usuario_id = localStorage.getItem("usuario_id");
+    const usuario_id = (localStorage.getItem("usuario_id") || sessionStorage.getItem("usuario_id"));
     if (!usuario_id || usuario_id === "undefined" || usuario_id === "null") {
-        localStorage.clear();
+        localStorage.clear(); sessionStorage.clear();
         window.location.href = "login.html";
         return false;
     }
