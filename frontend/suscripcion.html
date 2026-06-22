@@ -46,23 +46,27 @@
 
 <script src="js/suscripcion.js"></script>
 <script>
-    // ESTO DETECTA AUTOMÁTICAMENTE LA URL DE PRODUCCIÓN O LOCAL
+    // 1. VARIABLE DINÁMICA (No falla en producción)
     const API_BASE = window.location.origin;
 
     function cerrarSesion() {
-        localStorage.clear(); 
+        localStorage.clear();
         sessionStorage.clear();
         window.location.href = "index.html";
     }
 
-    document.addEventListener("DOMContentLoaded", async () => {
+    // ==========================================
+    // MENÚ DESPLEGABLE Y ADMINISTRACIÓN DE PERFIL
+    // ==========================================
+    
+    // Función separada (Igual que en mi-lista.js)
+    async function cargarDatosTopbar() {
         const usuario_id = localStorage.getItem("usuario_id") || sessionStorage.getItem("usuario_id");
         const perfil_id = localStorage.getItem("perfil_id") || sessionStorage.getItem("perfil_id");
         
         if (!usuario_id || !perfil_id) return;
 
         try {
-            // Petición dinámica que no se rompe en producción
             const res = await fetch(`${API_BASE}/perfiles/${usuario_id}`);
             const perfiles = await res.json();
             const actual = perfiles.find(p => String(p.id) === String(perfil_id));
@@ -72,20 +76,20 @@
                 document.getElementById("navAvatar").src = `img/${img}`;
                 document.getElementById("navNombrePerfil").innerText = actual.nombre;
                 
-                // Guardamos los datos en memoria
+                // Guardamos en memoria global para el botón Editar
                 window.perfilActualData = actual; 
             }
-        } catch(e) {
-            console.log("Error de conexión con el backend:", e);
+        } catch (e) {
+            console.log("Error al cargar topbar:", e);
         }
-    });
+    }
 
+    // Funciones globales (Igual que en mi-lista.js)
     function abrirEdicionPerfilActual() {
-        if (!window.perfilActualData) {
-            alert("Cargando datos del perfil, por favor espera un momento...");
-            return;
-        }
+        if (!window.perfilActualData) return;
+        
         document.getElementById("editNombrePerfil").value = window.perfilActualData.nombre;
+        
         const av = window.perfilActualData.avatar;
         document.getElementById("editAvatarPerfil").value = av.includes('.') ? av : av + '.jpg';
         document.getElementById("editInfantilPerfil").checked = (Number(window.perfilActualData.infantil) === 1);
@@ -98,7 +102,7 @@
         const nombre = document.getElementById("editNombrePerfil").value.trim();
         const avatar = document.getElementById("editAvatarPerfil").value;
         const infantil = document.getElementById("editInfantilPerfil").checked;
-        
+
         if (!nombre) return alert("El nombre es obligatorio");
 
         try {
@@ -118,16 +122,14 @@
                     sessionStorage.setItem("perfil_infantil", infantil ? "1" : "0");
                 }
                 window.location.reload(); 
-            } else { 
-                alert(datos.mensaje); 
+            } else {
+                alert(datos.mensaje);
             }
-        } catch(e) { 
-            alert("Error de conexión al guardar el perfil"); 
-        }
+        } catch(e) { alert("Error de conexión"); }
     }
 
     async function eliminarPerfilActual() {
-        if(!confirm("¿Estás completamente seguro de eliminar ESTE perfil?")) return;
+        if(!confirm("¿Estás 100% seguro de eliminar ESTE perfil?")) return;
         
         const perfil_id = localStorage.getItem("perfil_id") || sessionStorage.getItem("perfil_id");
         try {
@@ -135,18 +137,21 @@
             const datos = await res.json();
             
             if (datos.ok) {
-                localStorage.removeItem("perfil_id"); 
+                localStorage.removeItem("perfil_id");
                 localStorage.removeItem("perfil_nombre");
-                sessionStorage.removeItem("perfil_id"); 
+                sessionStorage.removeItem("perfil_id");
                 sessionStorage.removeItem("perfil_nombre");
                 window.location.href = "seleccionar-perfil.html";
             } else {
-                alert("No se pudo eliminar el perfil");
+                alert(datos.mensaje);
             }
-        } catch(e) {
-            alert("Error de red al intentar eliminar");
-        }
+        } catch(e) { alert("Error al eliminar"); }
     }
+
+    // Inicializador (Igual que en mi-lista.js)
+    document.addEventListener("DOMContentLoaded", () => {
+        cargarDatosTopbar();
+    });
 </script>
 </body>
 </html>
