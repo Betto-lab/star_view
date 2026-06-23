@@ -164,10 +164,11 @@ async function confirmarPago(event) {
             return;
         }
 
-        const urlPago = datos.init_point || datos.sandbox_init_point;
+        // SOLO aceptamos enlaces de cobro real (producción)
+        const urlPago = datos.init_point;
 
         if (!urlPago) {
-            mostrarMensajePago("Mercado Pago no devolvió un enlace de pago.");
+            mostrarMensajePago("Error de seguridad: La pasarela no está configurada para cobros reales.");
 
             if (botonPago) {
                 botonPago.disabled = false;
@@ -177,6 +178,7 @@ async function confirmarPago(event) {
             return;
         }
 
+        // Si todo está correcto, lo enviamos a pagar
         window.location.href = urlPago;
 
     } catch (error) {
