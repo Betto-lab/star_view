@@ -3,12 +3,9 @@ const cors = require("cors");
 const axios = require("axios");
 const bcrypt = require("bcrypt");
 const path = require("path");
-const dns = require('dns');
-
+const dns = require("dns");
 
 require("dotenv").config();
-
-
 
 const conexion = require("./db");
 
@@ -18,22 +15,23 @@ const clienteMP = process.env.MP_ACCESS_TOKEN
     ? new MercadoPagoConfig({ accessToken: process.env.MP_ACCESS_TOKEN })
     : null;
 
-const TMDB_API_KEY = "14848f0a935d7e54d7c8ced042603214";    
+const TMDB_API_KEY = process.env.TMDB_API_KEY || "14848f0a935d7e54d7c8ced042603214";
+
 const app = express();
 
 const registrosPendientes = new Map();
 const recuperacionesPerfil = new Map();
+const recuperacionesCuenta = new Map();
 
 function dominioAceptaCorreos(correo) {
     return new Promise((resolve) => {
-        const dominio = correo.split('@')[1];
+        const dominio = correo.split("@")[1];
 
-        // Consultamos los Registros MX (Mail Exchange) del dominio
-        dns.resolveMx(dominio, (err, direcciones) => {
-            if (err || !direcciones || direcciones.length === 0) {
-                resolve(false); // El dominio no existe o no acepta correos (Ej: asdasd.com)
+        dns.resolveMx(dominio, (error, direcciones) => {
+            if (error || !direcciones || direcciones.length === 0) {
+                resolve(false);
             } else {
-                resolve(true);  // El dominio es real (Ej: gmail.com)
+                resolve(true);
             }
         });
     });
@@ -62,21 +60,27 @@ function generarCodigoVerificacion() {
 }
 
 async function enviarCorreoVerificacion(correo, nombre, codigo, tipo = "registro") {
-    // Pega aquí la URL que te acaba de dar Google Apps Script
     const urlGoogleScript = "https://script.google.com/macros/s/AKfycbwoBuUvkjHGh0LWHiOJvZfg9HtkalQQNYeRLefQVPVYSXzoOxY_jzRGn342e-ox3NWO/exec";
 
     try {
         console.log(`[CORREO] Intentando enviar código ${codigo} a: ${correo} (Modo: ${tipo})`);
-        
-        // Usamos fetch nativo que es más compatible con las redirecciones de Google Apps Script
+
         const respuesta = await fetch(urlGoogleScript, {
             method: "POST",
-            headers: { "Content-Type": "text/plain" },
-            body: JSON.stringify({ correo, nombre, codigo, tipo }),
+            headers: {
+                "Content-Type": "text/plain"
+            },
+            body: JSON.stringify({
+                correo,
+                nombre,
+                codigo,
+                tipo
+            }),
             redirect: "follow"
         });
 
         console.log(`[CORREO] Respuesta de Google HTTP: ${respuesta.status}`);
+
     } catch (error) {
         console.log("[CORREO ERROR] Falló la conexión con Google Script:", error.message);
         throw new Error("Fallo en la API de correos");
@@ -94,96 +98,159 @@ app.get("/", (req, res) => {
 /* =========================
    REGISTRO Y LOGIN
 ========================= */
-const recuperacionesCuenta = new Map();
 
-// 1. Enviar código para recuperar cuenta principal
 app.post("/recuperar-cuenta/iniciar", (req, res) => {
     const { correo } = req.body;
-    
-    conexion.query("SELECT id, nombre FROM usuarios WHERE correo = ?", [correo], async (error, resultados) => {
-        if (error) {
-            return res.json({ ok: false, mensaje: "Error del servidor al buscar el correo." });
-        }
-        
-        // AHORA SÍ VALIDA SI EL CORREO EXISTE
-        if (resultados.length === 0) {
-            return res.json({ ok: false, mensaje: "Este correo no está registrado. Verifica si está bien escrito." });
-        }
-        
-        const codigo = generarCodigoVerificacion();
-        recuperacionesCuenta.set(correo, { codigo, creado: Date.now() });
 
-        try {
-            // El parámetro extra "cuenta" es para que Google Apps Script sepa qué correo enviar
-            await enviarCorreoVerificacion(correo, resultados[0].nombre, codigo, "cuenta");
-            res.json({ ok: true, mensaje: "Código enviado exitosamente a tu correo." });
-        } catch (e) {
-            res.json({ ok: false, mensaje: "El servidor falló al intentar enviar el correo." });
+    conexion.query(
+        "SELECT id, nombre FROM usuarios WHERE correo = ?",
+        [correo],
+        async (error, resultados) => {
+            if (error) {
+                return res.json({
+                    ok: false,
+                    mensaje: "Error del servidor al buscar el correo."
+                });
+            }
+
+            if (resultados.length === 0) {
+                return res.json({
+                    ok: false,
+                    mensaje: "Este correo no está registrado. Verifica si está bien escrito."
+                });
+            }
+
+            const codigo = generarCodigoVerificacion();
+
+            recuperacionesCuenta.set(correo, {
+                codigo,
+                creado: Date.now()
+            });
+
+            try {
+                await enviarCorreoVerificacion(correo, resultados[0].nombre, codigo, "cuenta");
+
+                res.json({
+                    ok: true,
+                    mensaje: "Código enviado exitosamente a tu correo."
+                });
+
+            } catch (errorCorreo) {
+                console.log("Error al enviar correo de recuperación:", errorCorreo);
+
+                res.json({
+                    ok: false,
+                    mensaje: "El servidor falló al intentar enviar el correo."
+                });
+            }
         }
-    });
+    );
 });
 
-// 2. Confirmar código y cambiar la contraseña de la cuenta
 app.post("/recuperar-cuenta/confirmar", async (req, res) => {
     const { correo, codigo, nueva_password } = req.body;
+
     const peticion = recuperacionesCuenta.get(correo);
 
-    if (!peticion || peticion.codigo !== codigo || (Date.now() - peticion.creado > 10 * 60 * 1000)) {
-        return res.json({ ok: false, mensaje: "Código inválido o expirado" });
+    if (!peticion || peticion.codigo !== codigo || Date.now() - peticion.creado > 10 * 60 * 1000) {
+        return res.json({
+            ok: false,
+            mensaje: "Código inválido o expirado"
+        });
     }
 
-    const passwordHash = await bcrypt.hash(nueva_password, 10);
-    conexion.query("UPDATE usuarios SET password = ? WHERE correo = ?", [passwordHash, correo], (error) => {
-        if (error) return res.json({ ok: false, mensaje: "Error al actualizar contraseña" });
-        recuperacionesCuenta.delete(correo);
-        res.json({ ok: true, mensaje: "Contraseña actualizada correctamente" });
-    });
+    try {
+        const passwordHash = await bcrypt.hash(nueva_password, 10);
+
+        conexion.query(
+            "UPDATE usuarios SET password = ? WHERE correo = ?",
+            [passwordHash, correo],
+            (error) => {
+                if (error) {
+                    return res.json({
+                        ok: false,
+                        mensaje: "Error al actualizar contraseña"
+                    });
+                }
+
+                recuperacionesCuenta.delete(correo);
+
+                res.json({
+                    ok: true,
+                    mensaje: "Contraseña actualizada correctamente"
+                });
+            }
+        );
+
+    } catch (error) {
+        console.log(error);
+
+        res.json({
+            ok: false,
+            mensaje: "Error al proteger la nueva contraseña"
+        });
+    }
 });
+
 app.post("/registro", async (req, res) => {
     const { nombre, correo, password } = req.body;
 
-    // 1. Validaciones básicas de formato
     if (!nombre || !correo || !password) {
-        return res.json({ ok: false, mensaje: "Completa todos los campos" });
+        return res.json({
+            ok: false,
+            mensaje: "Completa todos los campos"
+        });
     }
 
     if (!validarSoloLetras(nombre)) {
-        return res.json({ ok: false, mensaje: "El nombre solo puede contener letras y espacios" });
+        return res.json({
+            ok: false,
+            mensaje: "El nombre solo puede contener letras y espacios"
+        });
     }
 
     if (!validarFormatoCorreo(correo)) {
-        return res.json({ ok: false, mensaje: "El formato del correo no es válido" });
+        return res.json({
+            ok: false,
+            mensaje: "El formato del correo no es válido"
+        });
     }
 
     if (!validarPasswordSegura(password)) {
-        return res.json({ ok: false, mensaje: "La contraseña debe tener mínimo 8 caracteres, 1 número y 1 símbolo" });
+        return res.json({
+            ok: false,
+            mensaje: "La contraseña debe tener mínimo 8 caracteres, 1 número y 1 símbolo"
+        });
     }
 
-    // ==========================================
-    // 🔥 AQUÍ ENTRA LA GUILLOTINA BACKEND (DNS) 🔥
-    // ==========================================
     const esReal = await dominioAceptaCorreos(correo);
+
     if (!esReal) {
         return res.json({
             ok: false,
             mensaje: "El dominio del correo no existe o es temporal. Por favor, usa un correo real."
         });
     }
-    // ==========================================
 
     try {
-        // Si el correo es 100% real, buscamos si ya está registrado
         conexion.query(
             "SELECT id FROM usuarios WHERE correo = ?",
             [correo],
             async (error, resultados) => {
                 if (error) {
                     console.log("Error al verificar correo:", error);
-                    return res.json({ ok: false, mensaje: "Error al verificar el correo" });
+
+                    return res.json({
+                        ok: false,
+                        mensaje: "Error al verificar el correo"
+                    });
                 }
 
                 if (resultados.length > 0) {
-                    return res.json({ ok: false, mensaje: "Este correo ya está registrado" });
+                    return res.json({
+                        ok: false,
+                        mensaje: "Este correo ya está registrado"
+                    });
                 }
 
                 const passwordHash = await bcrypt.hash(password, 10);
@@ -198,15 +265,18 @@ app.post("/registro", async (req, res) => {
                 });
 
                 try {
-                    await enviarCorreoVerificacion(correo, nombre, codigo, "registro"); // <-- Cambié "perfil" por "registro"
+                    await enviarCorreoVerificacion(correo, nombre, codigo, "registro");
 
                     res.json({
                         ok: true,
                         mensaje: "Código de verificación enviado a tu correo"
                     });
+
                 } catch (errorCorreo) {
                     console.log("Error al enviar correo de verificación:", errorCorreo);
+
                     registrosPendientes.delete(correo);
+
                     res.json({
                         ok: false,
                         mensaje: "No se pudo enviar el correo de verificación. Revisa la configuración."
@@ -214,9 +284,14 @@ app.post("/registro", async (req, res) => {
                 }
             }
         );
+
     } catch (error) {
         console.log("Error interno en registro:", error);
-        res.json({ ok: false, mensaje: "Error interno del servidor" });
+
+        res.json({
+            ok: false,
+            mensaje: "Error interno del servidor"
+        });
     }
 });
 
@@ -263,6 +338,7 @@ app.post("/registro/verificar", (req, res) => {
         (error, resultados) => {
             if (error) {
                 console.log(error);
+
                 return res.json({
                     ok: false,
                     mensaje: "Error al verificar usuario"
@@ -281,9 +357,10 @@ app.post("/registro/verificar", (req, res) => {
             conexion.query(
                 "INSERT INTO usuarios(nombre, correo, password) VALUES (?, ?, ?)",
                 [registro.nombre, registro.correo, registro.passwordHash],
-                (error, resultado) => {
-                    if (error) {
-                        console.log(error);
+                (errorInsert, resultado) => {
+                    if (errorInsert) {
+                        console.log(errorInsert);
+
                         return res.json({
                             ok: false,
                             mensaje: "Error al registrar usuario"
@@ -323,6 +400,7 @@ app.post("/login", (req, res) => {
         async (error, resultados) => {
             if (error) {
                 console.log(error);
+
                 return res.json({
                     ok: false,
                     mensaje: "Error en el servidor"
@@ -342,7 +420,7 @@ app.post("/login", (req, res) => {
 
             try {
                 passwordValida = await bcrypt.compare(password, usuario.password);
-            } catch (error) {
+            } catch (errorCompare) {
                 passwordValida = false;
             }
 
@@ -419,9 +497,9 @@ app.get("/contenido/perfil/:perfil_id", (req, res) => {
 
             sql += " ORDER BY id DESC";
 
-            conexion.query(sql, parametros, (error, resultados) => {
-                if (error) {
-                    console.log(error);
+            conexion.query(sql, parametros, (errorContenido, resultados) => {
+                if (errorContenido) {
+                    console.log(errorContenido);
                     return res.json([]);
                 }
 
@@ -499,6 +577,7 @@ app.post("/perfiles", (req, res) => {
         async (error, resultados) => {
             if (error) {
                 console.log(error);
+
                 return res.json({
                     ok: false,
                     mensaje: "Error al verificar perfiles"
@@ -518,9 +597,10 @@ app.post("/perfiles", (req, res) => {
                 `INSERT INTO perfiles(usuario_id, nombre, avatar, infantil, password_perfil)
                  VALUES (?, ?, ?, ?, ?)`,
                 [usuario_id, nombre, avatar, infantil ? 1 : 0, passwordHash],
-                (error) => {
-                    if (error) {
-                        console.log(error);
+                (errorInsert) => {
+                    if (errorInsert) {
+                        console.log(errorInsert);
+
                         return res.json({
                             ok: false,
                             mensaje: "No se pudo crear el perfil"
@@ -536,7 +616,6 @@ app.post("/perfiles", (req, res) => {
         }
     );
 });
-
 
 app.post("/perfiles/verificar", (req, res) => {
     const { usuario_id, perfil_id, password_perfil } = req.body;
@@ -556,6 +635,7 @@ app.post("/perfiles/verificar", (req, res) => {
         async (error, resultados) => {
             if (error) {
                 console.log(error);
+
                 return res.json({
                     ok: false,
                     mensaje: "Error al verificar perfil"
@@ -628,6 +708,7 @@ app.post("/perfiles/recuperar-iniciar", (req, res) => {
         async (error, resultados) => {
             if (error) {
                 console.log(error);
+
                 return res.json({
                     ok: false,
                     mensaje: "Error al buscar el perfil"
@@ -653,7 +734,6 @@ app.post("/perfiles/recuperar-iniciar", (req, res) => {
             });
 
             try {
-                // AQUÍ LE AGREGAMOS EL "perfil" AL FINAL DE LA FUNCIÓN
                 await enviarCorreoVerificacion(
                     datos.usuario_correo,
                     datos.usuario_nombre,
@@ -728,6 +808,7 @@ app.post("/perfiles/recuperar-confirmar", (req, res) => {
     bcrypt.hash(nueva_password, 10, (errorHash, passwordHash) => {
         if (errorHash) {
             console.log(errorHash);
+
             return res.json({
                 ok: false,
                 mensaje: "Error al proteger la nueva contraseña"
@@ -742,6 +823,7 @@ app.post("/perfiles/recuperar-confirmar", (req, res) => {
             (error) => {
                 if (error) {
                     console.log(error);
+
                     return res.json({
                         ok: false,
                         mensaje: "No se pudo actualizar la contraseña del perfil"
@@ -779,6 +861,7 @@ app.post("/mi-lista", (req, res) => {
         (error, resultados) => {
             if (error) {
                 console.log(error);
+
                 return res.json({
                     ok: false,
                     mensaje: "Error al verificar Mi Lista"
@@ -795,9 +878,10 @@ app.post("/mi-lista", (req, res) => {
             conexion.query(
                 "INSERT INTO mi_lista(perfil_id, contenido_id) VALUES (?, ?)",
                 [perfil_id, contenido_id],
-                (error) => {
-                    if (error) {
-                        console.log(error);
+                (errorInsert) => {
+                    if (errorInsert) {
+                        console.log(errorInsert);
+
                         return res.json({
                             ok: false,
                             mensaje: "No se pudo agregar a Mi Lista"
@@ -844,6 +928,7 @@ app.delete("/mi-lista/:perfil_id/:contenido_id", (req, res) => {
         (error) => {
             if (error) {
                 console.log(error);
+
                 return res.json({
                     ok: false,
                     mensaje: "No se pudo eliminar"
@@ -878,6 +963,7 @@ app.post("/historial", (req, res) => {
         (error, resultados) => {
             if (error) {
                 console.log(error);
+
                 return res.json({
                     ok: false,
                     mensaje: "Error al consultar historial"
@@ -896,9 +982,10 @@ app.post("/historial", (req, res) => {
                  (perfil_id, contenido_id, minuto_actual, porcentaje, terminado)
                  VALUES (?, ?, 0, 0, 0)`,
                 [perfil_id, contenido_id],
-                (error) => {
-                    if (error) {
-                        console.log(error);
+                (errorInsert) => {
+                    if (errorInsert) {
+                        console.log(errorInsert);
+
                         return res.json({
                             ok: false,
                             mensaje: "Error al registrar historial"
@@ -944,9 +1031,12 @@ app.put("/historial/visto/:id", (req, res) => {
     const contenido_id = req.params.id;
     const { perfil_id } = req.body;
 
-    let sql = `UPDATE historial
-               SET terminado = 1, porcentaje = 100
-               WHERE contenido_id = ?`;
+    let sql = `
+        UPDATE historial
+        SET terminado = 1, porcentaje = 100
+        WHERE contenido_id = ?
+    `;
+
     const parametros = [contenido_id];
 
     if (perfil_id) {
@@ -957,6 +1047,7 @@ app.put("/historial/visto/:id", (req, res) => {
     conexion.query(sql, parametros, (error) => {
         if (error) {
             console.log(error);
+
             return res.json({
                 ok: false,
                 mensaje: "Error al marcar como visto"
@@ -995,6 +1086,7 @@ app.put("/historial/progreso", (req, res) => {
         (error) => {
             if (error) {
                 console.log(error);
+
                 return res.json({
                     ok: false,
                     mensaje: "Error al actualizar progreso"
@@ -1044,6 +1136,7 @@ app.get("/tmdb/populares", async (req, res) => {
         }));
 
         res.json(peliculas);
+
     } catch (error) {
         console.log("Error al obtener populares de TMDb:", error.message);
         res.json([]);
@@ -1194,6 +1287,7 @@ app.post("/tmdb/importar", async (req, res) => {
         async (error, resultados) => {
             if (error) {
                 console.log(error);
+
                 return res.json({
                     error: true,
                     mensaje: "Error al buscar contenido en MariaDB"
@@ -1216,14 +1310,30 @@ app.post("/tmdb/importar", async (req, res) => {
                 );
 
                 const p = respuesta.data;
-                const genero = p.genres ? p.genres.map(g => g.name).join(", ") : "Sin género";
-                const imagen = p.poster_path ? `https://image.tmdb.org/t/p/w500${p.poster_path}` : "";
-                const fondo = p.backdrop_path ? `https://image.tmdb.org/t/p/original${p.backdrop_path}` : "";
+
+                const genero = p.genres
+                    ? p.genres.map(g => g.name).join(", ")
+                    : "Sin género";
+
+                const imagen = p.poster_path
+                    ? `https://image.tmdb.org/t/p/w500${p.poster_path}`
+                    : "";
+
+                const fondo = p.backdrop_path
+                    ? `https://image.tmdb.org/t/p/original${p.backdrop_path}`
+                    : "";
+
+                const generoMinuscula = genero.toLowerCase();
+
+                const esInfantil =
+                    generoMinuscula.includes("familia") ||
+                    generoMinuscula.includes("animación") ||
+                    generoMinuscula.includes("animacion");
 
                 conexion.query(
                     `INSERT INTO contenido
-                     (titulo, tipo, genero, descripcion, imagen, fondo, tmdb_id, fecha_estreno, calificacion, origen)
-                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                     (titulo, tipo, genero, descripcion, imagen, fondo, tmdb_id, fecha_estreno, calificacion, origen, infantil)
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
                     [
                         p.title,
                         "pelicula",
@@ -1234,11 +1344,13 @@ app.post("/tmdb/importar", async (req, res) => {
                         p.id,
                         p.release_date || null,
                         p.vote_average || 0,
-                        "tmdb"
+                        "tmdb",
+                        esInfantil ? 1 : 0
                     ],
-                    (error, resultado) => {
-                        if (error) {
-                            console.log(error);
+                    (errorInsert, resultado) => {
+                        if (errorInsert) {
+                            console.log(errorInsert);
+
                             return res.json({
                                 error: true,
                                 mensaje: "Error al guardar contenido de TMDb"
@@ -1256,12 +1368,15 @@ app.post("/tmdb/importar", async (req, res) => {
                             tmdb_id: p.id,
                             fecha_estreno: p.release_date || null,
                             calificacion: p.vote_average || 0,
-                            origen: "tmdb"
+                            origen: "tmdb",
+                            infantil: esInfantil ? 1 : 0
                         });
                     }
                 );
-            } catch (error) {
-                console.log("Error al consultar TMDb:", error.message);
+
+            } catch (errorApi) {
+                console.log("Error al consultar TMDb:", errorApi.message);
+
                 res.json({
                     error: true,
                     mensaje: "No se pudo obtener la película desde TMDb"
@@ -1294,63 +1409,109 @@ app.get("/planes", (req, res) => {
 ========================================= */
 app.post("/pagos", (req, res) => {
     const { usuario_id, plan_id, metodo_pago, monto } = req.body;
-    
-    // Código único para la boleta (Ej: BOLETA-SV-847261)
+
+    if (!usuario_id || !plan_id || !metodo_pago || !monto) {
+        return res.json({
+            ok: false,
+            mensaje: "Datos incompletos para procesar el pago"
+        });
+    }
+
     const codigo_comprobante = "BOLETA-SV-" + Math.floor(Math.random() * 100000000);
 
-    conexion.query("SELECT nombre, correo FROM usuarios WHERE id = ?", [usuario_id], (errUsuario, usuarios) => {
-        if (errUsuario || usuarios.length === 0) return res.json({ ok: false, mensaje: "Usuario no encontrado" });
-        const usuario = usuarios[0];
+    conexion.query(
+        "SELECT nombre, correo FROM usuarios WHERE id = ?",
+        [usuario_id],
+        (errUsuario, usuarios) => {
+            if (errUsuario || usuarios.length === 0) {
+                return res.json({
+                    ok: false,
+                    mensaje: "Usuario no encontrado"
+                });
+            }
 
-        conexion.query("SELECT nombre FROM planes WHERE id = ?", [plan_id], (errPlan, planes) => {
-            if (errPlan || planes.length === 0) return res.json({ ok: false, mensaje: "Plan no encontrado" });
-            const planNombre = planes[0].nombre;
+            const usuario = usuarios[0];
 
-            // Registrar el pago
             conexion.query(
-                "INSERT INTO pagos (usuario_id, plan_id, metodo_pago, monto, estado, codigo_comprobante) VALUES (?, ?, ?, ?, 'pagado', ?)",
-                [usuario_id, plan_id, metodo_pago, monto, codigo_comprobante],
-                (errPago) => {
-                    if (errPago) return res.json({ ok: false, mensaje: "Error al registrar el pago" });
+                "SELECT nombre FROM planes WHERE id = ?",
+                [plan_id],
+                (errPlan, planes) => {
+                    if (errPlan || planes.length === 0) {
+                        return res.json({
+                            ok: false,
+                            mensaje: "Plan no encontrado"
+                        });
+                    }
 
-                    // Desactivar planes viejos y activar el nuevo por 1 mes
+                    const planNombre = planes[0].nombre;
+
                     conexion.query(
-                        "UPDATE suscripciones SET estado = 'cancelada' WHERE usuario_id = ? AND estado = 'activa'",
-                        [usuario_id],
-                        () => {
+                        `INSERT INTO pagos
+                         (usuario_id, plan_id, metodo_pago, monto, estado, codigo_comprobante)
+                         VALUES (?, ?, ?, ?, 'pagado', ?)`,
+                        [usuario_id, plan_id, metodo_pago, monto, codigo_comprobante],
+                        (errPago, resultadoPago) => {
+                            if (errPago) {
+                                console.log(errPago);
+                                return res.json({
+                                    ok: false,
+                                    mensaje: "Error al registrar el pago"
+                                });
+                            }
+
                             conexion.query(
-                                "INSERT INTO suscripciones (usuario_id, plan_id, fecha_inicio, fecha_fin) VALUES (?, ?, NOW(), DATE_ADD(NOW(), INTERVAL 1 MONTH))",
-                                [usuario_id, plan_id],
-                                async (errSuscripcion) => {
-                                    if (errSuscripcion) return res.json({ ok: false, mensaje: "Error al activar suscripción" });
+                                "UPDATE suscripciones SET estado = 'cancelada' WHERE usuario_id = ? AND estado = 'activa'",
+                                [usuario_id],
+                                () => {
+                                    conexion.query(
+                                        `INSERT INTO suscripciones
+                                         (usuario_id, plan_id, estado, fecha_inicio, fecha_fin)
+                                         VALUES (?, ?, 'activa', NOW(), DATE_ADD(NOW(), INTERVAL 1 MONTH))`,
+                                        [usuario_id, plan_id],
+                                        async (errSuscripcion) => {
+                                            if (errSuscripcion) {
+                                                console.log(errSuscripcion);
+                                                return res.json({
+                                                    ok: false,
+                                                    mensaje: "Pago registrado, pero no se pudo activar la suscripción"
+                                                });
+                                            }
 
-                                    // ENVIAR A GOOGLE APPS SCRIPT
-                                    const fechaHoy = new Date().toLocaleDateString('es-PE');
-                                    
-                                    try {
-                                        await axios.post(process.env.GOOGLE_SCRIPT_URL, {
-                                            tipo: "boleta",
-                                            correo: usuario.correo,
-                                            nombre: usuario.nombre,
-                                            monto: Number(monto).toFixed(2),
-                                            planNombre: planNombre,
-                                            codigo_comprobante: codigo_comprobante,
-                                            metodo_pago: metodo_pago,
-                                            fecha: fechaHoy
-                                        });
-                                    } catch (errorCorreo) {
-                                        console.log("Error contactando a Google Script:", errorCorreo.message);
-                                    }
+                                            const fechaHoy = new Date().toLocaleDateString("es-PE");
 
-                                    res.json({ ok: true, mensaje: "Suscripción activada y boleta enviada." });
+                                            if (process.env.GOOGLE_SCRIPT_URL) {
+                                                try {
+                                                    await axios.post(process.env.GOOGLE_SCRIPT_URL, {
+                                                        tipo: "boleta",
+                                                        correo: usuario.correo,
+                                                        nombre: usuario.nombre,
+                                                        monto: Number(monto).toFixed(2),
+                                                        planNombre: planNombre,
+                                                        codigo_comprobante: codigo_comprobante,
+                                                        metodo_pago: metodo_pago,
+                                                        fecha: fechaHoy
+                                                    });
+                                                } catch (errorCorreo) {
+                                                    console.log("Error contactando a Google Script:", errorCorreo.message);
+                                                }
+                                            }
+
+                                            res.json({
+                                                ok: true,
+                                                mensaje: "Suscripción activada y boleta enviada.",
+                                                pago_id: resultadoPago.insertId,
+                                                codigo_comprobante
+                                            });
+                                        }
+                                    );
                                 }
                             );
                         }
                     );
                 }
             );
-        });
-    });
+        }
+    );
 });
 /* =========================================
    1. CÁLCULO DE PRORRATEO Y REGLAS DE NEGOCIO
@@ -1650,6 +1811,7 @@ app.put("/suscripcion/cancelar/:id", (req, res) => {
         (error) => {
             if (error) {
                 console.log(error);
+
                 return res.json({
                     ok: false,
                     mensaje: "No se pudo cancelar la suscripción"
@@ -1663,92 +1825,212 @@ app.put("/suscripcion/cancelar/:id", (req, res) => {
         }
     );
 });
+
 /* =========================================
-   SISTEMA DE RECOMENDACIONES LOCALES (MULTI-GÉNERO)
+   SISTEMA DE RECOMENDACIONES LOCALES MULTI-GÉNERO
 ========================================= */
+
 app.get("/api/recomendaciones/:genero/:id_actual", (req, res) => {
     const { genero, id_actual } = req.params;
+    const perfil_id = req.query.perfil_id;
 
-    // 1. Separamos los géneros por comas, quitamos espacios extra y los unimos con un "OR" lógico (|)
-    const generosArray = genero.split(',').map(g => g.trim());
-    const regexPattern = generosArray.join('|');
+    const generosArray = decodeURIComponent(genero || "")
+        .split(",")
+        .map(g => g.trim())
+        .filter(g => g.length > 0);
 
-    // 2. Usamos REGEXP en MariaDB/MySQL para buscar CUALQUIERA de esas palabras
-    conexion.query(
-        "SELECT * FROM contenido WHERE genero REGEXP ? AND id != ? LIMIT 6",
-        [regexPattern, id_actual],
-        (error, resultados) => {
+    const regexPattern = generosArray.length > 0
+        ? generosArray.join("|")
+        : ".*";
+
+    function buscarRecomendaciones(esInfantil) {
+        let sql = `
+            SELECT *
+            FROM contenido
+            WHERE id != ?
+        `;
+
+        const parametros = [id_actual];
+
+        if (esInfantil) {
+            sql += " AND infantil = 1";
+        }
+
+        sql += " AND genero REGEXP ?";
+        parametros.push(regexPattern);
+
+        sql += " ORDER BY id DESC LIMIT 6";
+
+        conexion.query(sql, parametros, (error, resultados) => {
             if (error) {
                 console.log("Error buscando recomendaciones:", error);
                 return res.json([]);
             }
+
+            if (esInfantil && resultados.length === 0) {
+                conexion.query(
+                    `SELECT *
+                     FROM contenido
+                     WHERE id != ?
+                     AND infantil = 1
+                     ORDER BY id DESC
+                     LIMIT 6`,
+                    [id_actual],
+                    (errorFallback, resultadosFallback) => {
+                        if (errorFallback) {
+                            console.log("Error buscando recomendaciones infantiles:", errorFallback);
+                            return res.json([]);
+                        }
+
+                        return res.json(resultadosFallback);
+                    }
+                );
+
+                return;
+            }
+
             res.json(resultados);
+        });
+    }
+
+    if (!perfil_id) {
+        return buscarRecomendaciones(false);
+    }
+
+    conexion.query(
+        "SELECT infantil FROM perfiles WHERE id = ?",
+        [perfil_id],
+        (error, perfiles) => {
+            if (error) {
+                console.log("Error al verificar perfil para recomendaciones:", error);
+                return res.json([]);
+            }
+
+            const esInfantil = perfiles.length > 0 && Number(perfiles[0].infantil) === 1;
+
+            buscarRecomendaciones(esInfantil);
         }
     );
 });
 
 /* =========================================
-   RUTAS PARA CASOS DE PRUEBA (HU03 Y HU15)
+   RUTAS PARA CASOS DE PRUEBA HU03 Y HU15
 ========================================= */
 
-// HU03-TC03: Editar un perfil existente
 app.put("/perfiles/:id", (req, res) => {
     const { id } = req.params;
     const { nombre, avatar, infantil } = req.body;
-    
+
     conexion.query(
         "UPDATE perfiles SET nombre = ?, avatar = ?, infantil = ? WHERE id = ?",
         [nombre, avatar, infantil ? 1 : 0, id],
         (error) => {
-            if (error) return res.json({ ok: false, mensaje: "Error al actualizar perfil" });
-            res.json({ ok: true, mensaje: "Perfil actualizado correctamente" });
+            if (error) {
+                return res.json({
+                    ok: false,
+                    mensaje: "Error al actualizar perfil"
+                });
+            }
+
+            res.json({
+                ok: true,
+                mensaje: "Perfil actualizado correctamente"
+            });
         }
     );
 });
 
-// HU03-TC04: Eliminar un perfil existente
 app.delete("/perfiles/:id", (req, res) => {
     const { id } = req.params;
-    // Eliminamos en cascada: Historial -> Mi lista -> Perfil
+
     conexion.query("DELETE FROM historial WHERE perfil_id = ?", [id], () => {
         conexion.query("DELETE FROM mi_lista WHERE perfil_id = ?", [id], () => {
             conexion.query("DELETE FROM perfiles WHERE id = ?", [id], (error) => {
-                if (error) return res.json({ ok: false, mensaje: "Error al eliminar perfil" });
-                res.json({ ok: true, mensaje: "Perfil eliminado correctamente" });
+                if (error) {
+                    return res.json({
+                        ok: false,
+                        mensaje: "Error al eliminar perfil"
+                    });
+                }
+
+                res.json({
+                    ok: true,
+                    mensaje: "Perfil eliminado correctamente"
+                });
             });
         });
     });
 });
 
-// HU15: Sugerencias basadas en el género más visto del perfil
 app.get("/recomendaciones/historial/:perfil_id", (req, res) => {
     const { perfil_id } = req.params;
-    
+
     conexion.query(
-        `SELECT c.genero, COUNT(*) as vistas
-         FROM historial h
-         INNER JOIN contenido c ON h.contenido_id = c.id
-         WHERE h.perfil_id = ?
-         GROUP BY c.genero
-         ORDER BY vistas DESC
-         LIMIT 1`,
+        `SELECT infantil FROM perfiles WHERE id = ?`,
         [perfil_id],
-        (error, resultados) => {
-            if (error || resultados.length === 0) {
-                return res.json({ ok: false, mensaje: "No hay historial suficiente" });
+        (errorPerfil, perfiles) => {
+            if (errorPerfil) {
+                console.log(errorPerfil);
+                return res.json({
+                    ok: false,
+                    mensaje: "Error al verificar perfil"
+                });
             }
 
-            const generoFavorito = resultados[0].genero.split(',')[0].trim();
+            const esInfantil = perfiles.length > 0 && Number(perfiles[0].infantil) === 1;
 
             conexion.query(
-                `SELECT c.* FROM contenido c
-                 WHERE c.genero LIKE ? 
-                 AND c.id NOT IN (SELECT contenido_id FROM historial WHERE perfil_id = ? AND terminado = 1)
-                 LIMIT 12`,
-                [`%${generoFavorito}%`, perfil_id],
-                (err, peliculas) => {
-                    if (err) return res.json({ ok: false });
-                    res.json({ ok: true, genero: generoFavorito, recomendaciones: peliculas });
+                `SELECT c.genero, COUNT(*) AS vistas
+                 FROM historial h
+                 INNER JOIN contenido c ON h.contenido_id = c.id
+                 WHERE h.perfil_id = ?
+                 GROUP BY c.genero
+                 ORDER BY vistas DESC
+                 LIMIT 1`,
+                [perfil_id],
+                (error, resultados) => {
+                    if (error || resultados.length === 0) {
+                        return res.json({
+                            ok: false,
+                            mensaje: "No hay historial suficiente"
+                        });
+                    }
+
+                    const generoFavorito = resultados[0].genero.split(",")[0].trim();
+
+                    let sql = `
+                        SELECT c.*
+                        FROM contenido c
+                        WHERE c.genero LIKE ?
+                        AND c.id NOT IN (
+                            SELECT contenido_id
+                            FROM historial
+                            WHERE perfil_id = ?
+                            AND terminado = 1
+                        )
+                    `;
+
+                    const parametros = [`%${generoFavorito}%`, perfil_id];
+
+                    if (esInfantil) {
+                        sql += " AND c.infantil = 1";
+                    }
+
+                    sql += " LIMIT 12";
+
+                    conexion.query(sql, parametros, (errorRecomendaciones, peliculas) => {
+                        if (errorRecomendaciones) {
+                            return res.json({
+                                ok: false
+                            });
+                        }
+
+                        res.json({
+                            ok: true,
+                            genero: generoFavorito,
+                            recomendaciones: peliculas
+                        });
+                    });
                 }
             );
         }
@@ -1759,65 +2041,84 @@ app.get("/recomendaciones/historial/:perfil_id", (req, res) => {
    CONTROL DE PANTALLAS SIMULTÁNEAS Y CALIDAD
 ========================================= */
 
-// 1. Verificar disponibilidad e iniciar reproducción
 app.post("/api/stream/iniciar", (req, res) => {
     const { usuario_id, dispositivo_token } = req.body;
 
     if (!usuario_id || !dispositivo_token) {
-        return res.json({ ok: false, mensaje: "Faltan datos de sesión." });
+        return res.json({
+            ok: false,
+            mensaje: "Faltan datos de sesión."
+        });
     }
 
-    // SOLUCIÓN: Usamos DATE_SUB(NOW()) de MySQL para evitar problemas de zona horaria con Vercel
     conexion.query(
         "DELETE FROM reproducciones_activas WHERE ultima_actividad < DATE_SUB(NOW(), INTERVAL 25 SECOND)",
         (errLimpieza) => {
-            if (errLimpieza) console.error("Error limpiando sesiones:", errLimpieza);
+            if (errLimpieza) {
+                console.error("Error limpiando sesiones:", errLimpieza);
+            }
 
             conexion.query(
-                `SELECT s.estado, p.pantallas, p.calidad 
+                `SELECT s.estado, p.pantallas, p.calidad
                  FROM suscripciones s
                  INNER JOIN planes p ON s.plan_id = p.id
-                 WHERE s.usuario_id = ? AND s.estado = 'activa'
-                 ORDER BY s.id DESC LIMIT 1`,
+                 WHERE s.usuario_id = ?
+                 AND s.estado = 'activa'
+                 ORDER BY s.id DESC
+                 LIMIT 1`,
                 [usuario_id],
-                (error, suscripcion) => {
-                    if (error || suscripcion.length === 0) {
-                        return res.json({ ok: false, mensaje: "No tienes una suscripción activa." });
+                (errorSuscripcion, suscripcion) => {
+                    if (errorSuscripcion || suscripcion.length === 0) {
+                        return res.json({
+                            ok: false,
+                            mensaje: "No tienes una suscripción activa."
+                        });
                     }
 
                     const limites = suscripcion[0];
-                    // Aseguramos que sea un número real, por si la BD devuelve un texto
-                    const maxPantallas = parseInt(limites.pantallas) || 1; 
+                    const maxPantallas = parseInt(limites.pantallas) || 1;
 
                     conexion.query(
                         "SELECT dispositivo_token FROM reproducciones_activas WHERE usuario_id = ?",
                         [usuario_id],
-                        (errContador, activas) => {
-                            if (errContador) return res.json({ ok: false, mensaje: "Error de servidor." });
+                        (errorContador, activas) => {
+                            if (errorContador) {
+                                return res.json({
+                                    ok: false,
+                                    mensaje: "Error de servidor."
+                                });
+                            }
 
-                            const yaEstaReproduciendo = activas.some(a => a.dispositivo_token === dispositivo_token);
+                            const yaEstaReproduciendo = activas.some(
+                                item => item.dispositivo_token === dispositivo_token
+                            );
 
-                            // Validamos contra el número real de pantallas de su plan (1, 2 o 4)
                             if (activas.length >= maxPantallas && !yaEstaReproduciendo) {
-                                return res.json({ 
-                                    ok: false, 
+                                return res.json({
+                                    ok: false,
                                     limiteExcedido: true,
-                                    mensaje: `Tu plan actual solo permite ${maxPantallas} pantalla(s) en simultáneo. Cierra otra ventana.` 
+                                    mensaje: `Tu plan actual solo permite ${maxPantallas} pantalla(s) en simultáneo. Cierra otra ventana.`
                                 });
                             }
 
                             conexion.query(
-                                `INSERT INTO reproducciones_activas (usuario_id, dispositivo_token, ultima_actividad) 
-                                 VALUES (?, ?, NOW()) 
+                                `INSERT INTO reproducciones_activas
+                                 (usuario_id, dispositivo_token, ultima_actividad)
+                                 VALUES (?, ?, NOW())
                                  ON DUPLICATE KEY UPDATE ultima_actividad = NOW()`,
                                 [usuario_id, dispositivo_token],
                                 (errInsert) => {
-                                    if (errInsert) return res.json({ ok: false, mensaje: "Error al registrar pantalla." });
-                                    
-                                    res.json({ 
-                                        ok: true, 
+                                    if (errInsert) {
+                                        return res.json({
+                                            ok: false,
+                                            mensaje: "Error al registrar pantalla."
+                                        });
+                                    }
+
+                                    res.json({
+                                        ok: true,
                                         calidad_maxima: limites.calidad,
-                                        mensaje: "Streaming autorizado." 
+                                        mensaje: "Streaming autorizado."
                                     });
                                 }
                             );
@@ -1829,34 +2130,39 @@ app.post("/api/stream/iniciar", (req, res) => {
     );
 });
 
-// 2. Ping constante para mantener el dispositivo "vivo"
 app.post("/api/stream/ping", (req, res) => {
     const { usuario_id, dispositivo_token } = req.body;
+
     conexion.query(
         "UPDATE reproducciones_activas SET ultima_actividad = NOW() WHERE usuario_id = ? AND dispositivo_token = ?",
         [usuario_id, dispositivo_token],
-        () => res.json({ ok: true })
+        () => {
+            res.json({
+                ok: true
+            });
+        }
     );
 });
 
-// 3. Quitar dispositivo al salir del reproductor
 app.post("/api/stream/cerrar", (req, res) => {
     const { usuario_id, dispositivo_token } = req.body;
+
     conexion.query(
         "DELETE FROM reproducciones_activas WHERE usuario_id = ? AND dispositivo_token = ?",
         [usuario_id, dispositivo_token],
-        () => res.json({ ok: true, mensaje: "Pantalla liberada." })
+        () => {
+            res.json({
+                ok: true,
+                mensaje: "Pantalla liberada."
+            });
+        }
     );
 });
+
 /* =========================
-   SERVIDOR lo pongo en comentario porque cambiare a vercel
+   SERVIDOR PARA VERCEL
 ========================= */
 
-//const PORT = process.env.PORT || 3000;
-
-//app.listen(PORT, () => {
-//    console.log(`Servidor iniciado en puerto ${PORT}`);
-//});
 /* =========================================
    GENERAR RECIBO DE PAGO PARA DESCARGAR
 ========================================= */
@@ -1864,8 +2170,8 @@ app.get("/api/pagos/recibo/:pago_id", (req, res) => {
     const { pago_id } = req.params;
 
     const query = `
-        SELECT p.monto, p.metodo_pago, p.fecha_pago, p.codigo_comprobante, 
-               u.nombre as usuario_nombre, pl.nombre as plan_nombre
+        SELECT p.monto, p.metodo_pago, p.fecha_pago, p.codigo_comprobante,
+               u.nombre AS usuario_nombre, pl.nombre AS plan_nombre
         FROM pagos p
         JOIN usuarios u ON p.usuario_id = u.id
         JOIN planes pl ON p.plan_id = pl.id
@@ -1873,18 +2179,19 @@ app.get("/api/pagos/recibo/:pago_id", (req, res) => {
     `;
 
     conexion.query(query, [pago_id], (err, resultados) => {
-        if (err || resultados.length === 0) return res.status(404).send("Recibo no encontrado");
+        if (err || resultados.length === 0) {
+            return res.status(404).send("Recibo no encontrado");
+        }
 
         const pago = resultados[0];
-        const fechaFormat = new Date(pago.fecha_pago).toLocaleDateString('es-PE');
+        const fechaFormat = new Date(pago.fecha_pago).toLocaleDateString("es-PE");
 
-        // Generamos un HTML limpio listo para imprimir
         const htmlRecibo = `
             <!DOCTYPE html>
             <html lang="es">
             <head>
                 <meta charset="UTF-8">
-                <title>Recibo ${pago.codigo_comprobante}</title>
+                <title>Recibo ${pago.codigo_comprobante || ""}</title>
                 <style>
                     body { font-family: Arial, sans-serif; padding: 40px; color: #333; }
                     .recibo-container { max-width: 600px; margin: 0 auto; border: 1px solid #ddd; padding: 30px; border-radius: 8px; }
@@ -1901,7 +2208,7 @@ app.get("/api/pagos/recibo/:pago_id", (req, res) => {
                         <p>Comprobante de Pago Electrónico</p>
                     </div>
                     <div class="row"><span>Cliente:</span> <strong>${pago.usuario_nombre}</strong></div>
-                    <div class="row"><span>Código de Boleta:</span> <strong>${pago.codigo_comprobante}</strong></div>
+                    <div class="row"><span>Código de Boleta:</span> <strong>${pago.codigo_comprobante || "Sin código"}</strong></div>
                     <div class="row"><span>Fecha:</span> <strong>${fechaFormat}</strong></div>
                     <div class="row"><span>Plan Contratado:</span> <strong>Plan ${pago.plan_nombre}</strong></div>
                     <div class="row"><span>Método de Pago:</span> <strong>${pago.metodo_pago}</strong></div>
@@ -1910,38 +2217,54 @@ app.get("/api/pagos/recibo/:pago_id", (req, res) => {
             </body>
             </html>
         `;
+
         res.send(htmlRecibo);
     });
 });
+
 /* =========================================
-   CANCELAR SUSCRIPCIÓN (BLINDAJE DE TESIS)
+   CANCELAR SUSCRIPCIÓN
 ========================================= */
 app.post("/api/suscripciones/cancelar", (req, res) => {
     const { usuario_id, motivo } = req.body;
 
-    // 1. Buscamos la fecha de fin para decirle al usuario hasta cuándo tiene acceso
-    conexion.query("SELECT fecha_fin FROM suscripciones WHERE usuario_id = ? AND estado = 'activa' ORDER BY id DESC LIMIT 1", [usuario_id], (err, resultados) => {
-        if (err || resultados.length === 0) return res.json({ ok: false, mensaje: "No tienes un plan activo para cancelar." });
-        
-        const fechaFin = new Date(resultados[0].fecha_fin).toLocaleDateString('es-PE');
+    conexion.query(
+        "SELECT fecha_fin FROM suscripciones WHERE usuario_id = ? AND estado = 'activa' ORDER BY id DESC LIMIT 1",
+        [usuario_id],
+        (err, resultados) => {
+            if (err || resultados.length === 0) {
+                return res.json({
+                    ok: false,
+                    mensaje: "No tienes un plan activo para cancelar."
+                });
+            }
 
-        // 2. Actualizamos la BD: Apagamos la renovación, pero el estado SIGUE SIENDO 'activa'
-        const queryUpdate = `
-            UPDATE suscripciones 
-            SET renovacion_automatica = 0, 
-                fecha_cancelacion = NOW(),
-                motivo_cancelacion = ?
-            WHERE usuario_id = ? AND estado = 'activa'
-        `;
-        
-        conexion.query(queryUpdate, [motivo || "Decisión del usuario", usuario_id], (errUpdate) => {
-            if (errUpdate) return res.json({ ok: false, mensaje: "Error interno al cancelar." });
-            
-            res.json({ 
-                ok: true, 
-                mensaje: `Tu plan ha sido cancelado. No se te harán más cobros, pero podrás seguir disfrutando del contenido hasta el ${fechaFin}.` 
+            const fechaFin = new Date(resultados[0].fecha_fin).toLocaleDateString("es-PE");
+
+            const queryUpdate = `
+                UPDATE suscripciones
+                SET renovacion_automatica = 0,
+                    fecha_cancelacion = NOW(),
+                    motivo_cancelacion = ?
+                WHERE usuario_id = ?
+                AND estado = 'activa'
+            `;
+
+            conexion.query(queryUpdate, [motivo || "Decisión del usuario", usuario_id], (errUpdate) => {
+                if (errUpdate) {
+                    return res.json({
+                        ok: false,
+                        mensaje: "Error interno al cancelar."
+                    });
+                }
+
+                res.json({
+                    ok: true,
+                    mensaje: `Tu plan ha sido cancelado. No se te harán más cobros, pero podrás seguir disfrutando del contenido hasta el ${fechaFin}.`
+                });
             });
-        });
-    });
+        }
+    );
 });
+
 module.exports = app;
