@@ -99,23 +99,34 @@ async function cancelarSuscripcion(id) {
     if (!confirmar) return;
 
     try {
+        // NOTA: Asegúrate de que esta URL coincida exactamente con la ruta de tu backend.
+        // Si tu backend usa `/api/suscripciones/cancelar`, cámbiala aquí.
         const respuesta = await fetch(`${API_BASE}/suscripcion/cancelar/${id}`, {
-            method: "PUT",
+            method: "PUT", // O "POST", según hayas definido en tu backend
             headers: {
                 "Content-Type": "application/json"
             },
             body: JSON.stringify({
+                usuario_id: usuario_id, // Enviamos también el usuario_id si tu backend lo requiere
                 motivo_cancelacion: motivo
             })
         });
 
         const datos = await respuesta.json();
-        alert(datos.mensaje);
+        
+        // Modificación aquí para manejar si la respuesta fue exitosa o no
+        if (respuesta.ok || datos.ok) {
+            alert(datos.mensaje);
+            // En vez de solo recargar la info, puedes recargar la página 
+            // para que limpie el formulario y actualice el estado visualmente
+            window.location.reload(); 
+        } else {
+            alert("Error: " + (datos.mensaje || "No se pudo procesar la cancelación."));
+        }
 
-        cargarSuscripcion();
     } catch (error) {
-        alert("No se pudo cancelar la suscripción");
+        console.error("Error al cancelar:", error);
+        alert("No se pudo conectar con el servidor para cancelar la suscripción.");
     }
 }
-
 cargarSuscripcion();

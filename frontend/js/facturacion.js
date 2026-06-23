@@ -64,8 +64,10 @@ async function cargarFacturacion() {
     }
 }
 
-function descargarRecibo(id) {
-    window.open(`${API_BASE}/recibo/${id}`, "_blank");
+// Agrega esta función en tu js/facturacion.js
+function descargarRecibo(pago_id) {
+    // Abre una nueva pestaña que cargará el HTML del servidor y lanzará la ventana de impresión
+    window.open(`${window.location.origin}/api/pagos/recibo/${pago_id}`, '_blank');
 }
 
 cargarFacturacion();

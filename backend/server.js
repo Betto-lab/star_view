@@ -1353,12 +1353,12 @@ app.post("/pagos", (req, res) => {
     });
 });
 /* =========================================
-   1. CÁLCULO DE PRORRATEO (DESCUENTOS POR CAMBIO DE PLAN)
+   1. CÁLCULO DE PRORRATEO Y REGLAS DE NEGOCIO
 ========================================= */
 app.get("/api/pagos/calcular/:usuario_id/:nuevo_plan_id", (req, res) => {
     const { usuario_id, nuevo_plan_id } = req.params;
 
-    conexion.query("SELECT precio, nombre FROM planes WHERE id = ?", [nuevo_plan_id], (err1, planes) => {
+    conexion.query("SELECT id, precio, nombre FROM planes WHERE id = ?", [nuevo_plan_id], (err1, planes) => {
         if (err1 || planes.length === 0) return res.json({ ok: false, mensaje: "Plan no encontrado" });
         const nuevoPlan = planes[0];
 
@@ -1369,19 +1369,32 @@ app.get("/api/pagos/calcular/:usuario_id/:nuevo_plan_id", (req, res) => {
             WHERE s.usuario_id = ? AND s.estado = 'activa'
             ORDER BY s.id DESC LIMIT 1
         `, [usuario_id], (err2, suscripciones) => {
-            if (err2) return res.json({ ok: false, mensaje: "Error al buscar suscripción" });
+            if (err2) return res.json({ ok: false, mensaje: "Error de servidor" });
 
             let precio_final = Number(nuevoPlan.precio);
             let descuento = 0;
             let dias_restantes = 0;
             let es_upgrade = false;
+            let mensaje_minimo = false;
 
-            if (suscripciones.length > 0 && String(suscripciones[0].plan_id) !== String(nuevo_plan_id)) {
+            // Si el usuario ya tiene una suscripción activa
+            if (suscripciones.length > 0) {
                 const sub = suscripciones[0];
+
+                // ESCENARIO JURADO 1: Intenta comprar el mismo plan
+                if (String(sub.plan_id) === String(nuevo_plan_id)) {
+                    return res.json({ ok: false, mensaje: "Ya tienes este plan activo actualmente." });
+                }
+
+                // ESCENARIO JURADO 2: Intenta bajar a un plan más barato
+                if (Number(nuevoPlan.precio) < Number(sub.precio_actual)) {
+                    return res.json({ ok: false, mensaje: "No puedes cambiar a un plan inferior mientras tu suscripción actual siga activa." });
+                }
+
+                // ESCENARIO 3: Sube de plan correctamente (Upgrade)
                 const hoy = new Date();
                 const fechaFin = new Date(sub.fecha_fin);
                 const diferenciaMilisegundos = fechaFin - hoy;
-                
                 dias_restantes = Math.ceil(diferenciaMilisegundos / (1000 * 60 * 60 * 24));
 
                 if (dias_restantes > 0) {
@@ -1390,8 +1403,11 @@ app.get("/api/pagos/calcular/:usuario_id/:nuevo_plan_id", (req, res) => {
                     descuento = precioPorDia * dias_restantes;
                     precio_final = precio_final - descuento;
 
-                    // El cobro mínimo por Mercado Pago debe ser al menos S/ 3.00
-                    if (precio_final < 3.00) precio_final = 3.00;
+                    // ESCENARIO JURADO 3: El mínimo de Mercado Pago
+                    if (precio_final < 3.00) {
+                        precio_final = 3.00;
+                        mensaje_minimo = true; // Avisamos al frontend para que muestre la advertencia
+                    }
                 }
             }
 
@@ -1402,7 +1418,8 @@ app.get("/api/pagos/calcular/:usuario_id/:nuevo_plan_id", (req, res) => {
                 descuento: descuento.toFixed(2),
                 total_pagar: precio_final.toFixed(2),
                 dias_restantes: dias_restantes,
-                es_upgrade: es_upgrade
+                es_upgrade: es_upgrade,
+                mensaje_minimo: mensaje_minimo
             });
         });
     });
@@ -1840,5 +1857,91 @@ app.post("/api/stream/cerrar", (req, res) => {
 //app.listen(PORT, () => {
 //    console.log(`Servidor iniciado en puerto ${PORT}`);
 //});
+/* =========================================
+   GENERAR RECIBO DE PAGO PARA DESCARGAR
+========================================= */
+app.get("/api/pagos/recibo/:pago_id", (req, res) => {
+    const { pago_id } = req.params;
 
+    const query = `
+        SELECT p.monto, p.metodo_pago, p.fecha_pago, p.codigo_comprobante, 
+               u.nombre as usuario_nombre, pl.nombre as plan_nombre
+        FROM pagos p
+        JOIN usuarios u ON p.usuario_id = u.id
+        JOIN planes pl ON p.plan_id = pl.id
+        WHERE p.id = ?
+    `;
+
+    conexion.query(query, [pago_id], (err, resultados) => {
+        if (err || resultados.length === 0) return res.status(404).send("Recibo no encontrado");
+
+        const pago = resultados[0];
+        const fechaFormat = new Date(pago.fecha_pago).toLocaleDateString('es-PE');
+
+        // Generamos un HTML limpio listo para imprimir
+        const htmlRecibo = `
+            <!DOCTYPE html>
+            <html lang="es">
+            <head>
+                <meta charset="UTF-8">
+                <title>Recibo ${pago.codigo_comprobante}</title>
+                <style>
+                    body { font-family: Arial, sans-serif; padding: 40px; color: #333; }
+                    .recibo-container { max-width: 600px; margin: 0 auto; border: 1px solid #ddd; padding: 30px; border-radius: 8px; }
+                    .header { border-bottom: 2px solid #e50914; padding-bottom: 10px; margin-bottom: 20px; }
+                    .header h1 { color: #e50914; margin: 0; }
+                    .row { display: flex; justify-content: space-between; margin-bottom: 15px; border-bottom: 1px solid #eee; padding-bottom: 5px; }
+                    .total { font-size: 20px; font-weight: bold; color: #e50914; }
+                </style>
+            </head>
+            <body onload="window.print()">
+                <div class="recibo-container">
+                    <div class="header">
+                        <h1>STARVIEW</h1>
+                        <p>Comprobante de Pago Electrónico</p>
+                    </div>
+                    <div class="row"><span>Cliente:</span> <strong>${pago.usuario_nombre}</strong></div>
+                    <div class="row"><span>Código de Boleta:</span> <strong>${pago.codigo_comprobante}</strong></div>
+                    <div class="row"><span>Fecha:</span> <strong>${fechaFormat}</strong></div>
+                    <div class="row"><span>Plan Contratado:</span> <strong>Plan ${pago.plan_nombre}</strong></div>
+                    <div class="row"><span>Método de Pago:</span> <strong>${pago.metodo_pago}</strong></div>
+                    <div class="row total"><span>TOTAL PAGADO:</span> <span>S/ ${Number(pago.monto).toFixed(2)}</span></div>
+                </div>
+            </body>
+            </html>
+        `;
+        res.send(htmlRecibo);
+    });
+});
+/* =========================================
+   CANCELAR SUSCRIPCIÓN (BLINDAJE DE TESIS)
+========================================= */
+app.post("/api/suscripciones/cancelar", (req, res) => {
+    const { usuario_id, motivo } = req.body;
+
+    // 1. Buscamos la fecha de fin para decirle al usuario hasta cuándo tiene acceso
+    conexion.query("SELECT fecha_fin FROM suscripciones WHERE usuario_id = ? AND estado = 'activa' ORDER BY id DESC LIMIT 1", [usuario_id], (err, resultados) => {
+        if (err || resultados.length === 0) return res.json({ ok: false, mensaje: "No tienes un plan activo para cancelar." });
+        
+        const fechaFin = new Date(resultados[0].fecha_fin).toLocaleDateString('es-PE');
+
+        // 2. Actualizamos la BD: Apagamos la renovación, pero el estado SIGUE SIENDO 'activa'
+        const queryUpdate = `
+            UPDATE suscripciones 
+            SET renovacion_automatica = 0, 
+                fecha_cancelacion = NOW(),
+                motivo_cancelacion = ?
+            WHERE usuario_id = ? AND estado = 'activa'
+        `;
+        
+        conexion.query(queryUpdate, [motivo || "Decisión del usuario", usuario_id], (errUpdate) => {
+            if (errUpdate) return res.json({ ok: false, mensaje: "Error interno al cancelar." });
+            
+            res.json({ 
+                ok: true, 
+                mensaje: `Tu plan ha sido cancelado. No se te harán más cobros, pero podrás seguir disfrutando del contenido hasta el ${fechaFin}.` 
+            });
+        });
+    });
+});
 module.exports = app;

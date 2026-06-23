@@ -53,39 +53,63 @@ async function cargarResumenPago() {
     const precioPlan = document.getElementById("precioPlan");
     const totalPago = document.getElementById("totalPago");
     const resumenContenedor = document.querySelector(".pago-resumen");
+    const botonPagar = document.getElementById("btnPagar");
 
     try {
-        // Llamamos al servidor para que haga la matemática
         const respuesta = await fetch(`${API_BASE}/api/pagos/calcular/${usuario_id}/${plan_id}`);
         const calculo = await respuesta.json();
 
-        if (calculo.ok) {
-            nombrePlan.innerText = calculo.plan_nombre;
-            precioPlan.innerText = `S/ ${calculo.precio_original}`;
-            
-            montoFinalProrrateo = calculo.total_pagar; // Guardamos el precio final
-
-            // Si hay un descuento por cambio de plan, agregamos una fila en verde mostrando el cálculo
-            if (calculo.es_upgrade && calculo.descuento > 0) {
-                // Removemos la fila de descuento si ya existía para no duplicarla
-                const filaDescuentoAntigua = document.getElementById("filaDescuentoProrrateo");
-                if (filaDescuentoAntigua) filaDescuentoAntigua.remove();
-
-                const filaDescuento = document.createElement("div");
-                filaDescuento.id = "filaDescuentoProrrateo";
-                filaDescuento.className = "detail-row";
-                filaDescuento.style.color = "#86efac"; // Color verde
-                filaDescuento.innerHTML = `
-                    <span>Saldo a favor (${calculo.dias_restantes} días no usados)</span>
-                    <strong>- S/ ${calculo.descuento}</strong>
-                `;
-                
-                // Lo insertamos justo antes del "Total a pagar"
-                resumenContenedor.insertBefore(filaDescuento, document.querySelector(".total-row"));
-            }
-
-            totalPago.innerText = `S/ ${calculo.total_pagar}`;
+        // Si la regla de negocio bloquea la compra (ej. Mismo plan o Plan Inferior)
+        if (!calculo.ok) {
+            resumenContenedor.innerHTML = `
+                <div style="padding: 20px; background: rgba(229, 9, 20, 0.1); border: 1px solid #e50914; border-radius: 8px; text-align: center;">
+                    <h3 style="color: #e50914; margin-top: 0;">No disponible</h3>
+                    <p style="color: #fff; font-size: 15px;">${calculo.mensaje}</p>
+                    <button onclick="window.location.href='planes.html'" class="btn btn-secondary" style="margin-top: 15px;">Volver a Planes</button>
+                </div>
+            `;
+            if (botonPagar) botonPagar.style.display = "none";
+            return;
         }
+
+        // Si todo está bien, pintamos los precios
+        nombrePlan.innerText = calculo.plan_nombre;
+        precioPlan.innerText = `S/ ${calculo.precio_original}`;
+        montoFinalProrrateo = calculo.total_pagar; 
+
+        if (calculo.es_upgrade && calculo.descuento > 0) {
+            const filaDescuentoAntigua = document.getElementById("filaDescuentoProrrateo");
+            if (filaDescuentoAntigua) filaDescuentoAntigua.remove();
+            const avisoAntiguo = document.getElementById("avisoMinimoProrrateo");
+            if (avisoAntiguo) avisoAntiguo.remove();
+
+            const filaDescuento = document.createElement("div");
+            filaDescuento.id = "filaDescuentoProrrateo";
+            filaDescuento.className = "detail-row";
+            filaDescuento.style.color = "#86efac"; 
+            filaDescuento.innerHTML = `
+                <span>Saldo a favor (${calculo.dias_restantes} días no usados)</span>
+                <strong>- S/ ${calculo.descuento}</strong>
+            `;
+            resumenContenedor.insertBefore(filaDescuento, document.querySelector(".total-row"));
+
+            // Si el servidor detectó que la resta daba menos de 3 soles y aplicó el límite
+            if (calculo.mensaje_minimo) {
+                const avisoMinimo = document.createElement("p");
+                avisoMinimo.id = "avisoMinimoProrrateo";
+                avisoMinimo.style.fontSize = "12px";
+                avisoMinimo.style.color = "#94a3b8";
+                avisoMinimo.style.textAlign = "right";
+                avisoMinimo.style.marginTop = "10px";
+                avisoMinimo.innerHTML = `* Por políticas de seguridad de Mercado Pago, el cargo mínimo permitido es de <b>S/ 3.00</b>.`;
+                
+                // Lo ponemos just debajo del Total a Pagar
+                resumenContenedor.appendChild(avisoMinimo);
+            }
+        }
+
+        totalPago.innerText = `S/ ${calculo.total_pagar}`;
+        
     } catch (error) {
         console.error("Error al calcular el precio:", error);
     }
