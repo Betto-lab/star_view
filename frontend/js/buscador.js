@@ -3,7 +3,10 @@
 ========================================= */
 const API_BUSCADOR = window.location.origin;
 let catalogoBuscadorGlobal = [];
-
+// 1. NUEVA FUNCIÓN: Quitar tildes (acentos) para búsquedas exactas
+function normalizarTexto(texto) {
+    return texto ? texto.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase() : "";
+}
 // 1. Descargar catálogo en segundo plano (Filtrando niños)
 async function inicializarCatalogoBuscador() {
     try {
@@ -76,21 +79,28 @@ function realizarBusquedaFlotante() {
     
     if (!input || !contenedor) return;
     
-    const query = input.value.toLowerCase().trim();
+    // Obtenemos lo que escribe el usuario y lo normalizamos
+    const queryNormalizada = normalizarTexto(input.value.trim());
+    const queryOriginal = input.value.trim(); 
     
-    if (query.length === 0) {
+    if (queryNormalizada.length === 0) {
         contenedor.innerHTML = ""; 
         return;
     }
 
-    const filtrados = catalogoBuscadorGlobal.filter(item => 
-        (item.titulo && item.titulo.toLowerCase().includes(query)) || 
-        (item.genero && item.genero.toLowerCase().includes(query)) ||
-        (item.tipo && item.tipo.toLowerCase().includes(query))
-    );
+    const filtrados = catalogoBuscadorGlobal.filter(item => {
+        // Limpiamos los datos de la base de datos para compararlos sin tildes ni mayúsculas
+        const titulo = normalizarTexto(item.titulo);
+        const genero = normalizarTexto(item.genero);
+        const tipo = normalizarTexto(item.tipo);
+        
+        return titulo.includes(queryNormalizada) || 
+               genero.includes(queryNormalizada) || 
+               tipo.includes(queryNormalizada);
+    });
 
     if (filtrados.length === 0) {
-        contenedor.innerHTML = `<div class="empty-state" style="grid-column: 1/-1; text-align: center; padding: 40px; color: #fff;">No se encontraron resultados para "${query}"</div>`;
+        contenedor.innerHTML = `<div class="empty-state" style="grid-column: 1/-1; text-align: center; padding: 40px; color: #fff;">No se encontraron resultados para "${queryOriginal}"</div>`;
         return;
     }
 
@@ -99,19 +109,47 @@ function realizarBusquedaFlotante() {
 
 // 5. CONECTAR LOS BOTONES CUANDO LA PÁGINA CARGUE
 document.addEventListener("DOMContentLoaded", () => {
+    
+    // --- SOLUCIÓN AL PARPADEO DEL AVATAR ROJO ---
+    const navAvatar = document.getElementById("navAvatar");
+    if (navAvatar) {
+        // Verificamos si tenemos el avatar guardado en la caché local
+        const avatarCache = localStorage.getItem("avatar_cache_global");
+        
+        if (avatarCache) {
+            navAvatar.src = avatarCache; // Lo aplicamos inmediatamente sin esperar al servidor
+        } else {
+            navAvatar.style.opacity = "0"; // Si no hay caché, lo ocultamos un segundo para evitar el rojo
+            navAvatar.style.transition = "opacity 0.3s ease";
+        }
+
+        // Creamos un observador para detectar cuando el servidor (en cargarDatosTopbar) responda con la imagen
+        const observer = new MutationObserver((mutations) => {
+            mutations.forEach((mutation) => {
+                if (mutation.attributeName === "src") {
+                    navAvatar.style.opacity = "1"; // Lo mostramos
+                    localStorage.setItem("avatar_cache_global", navAvatar.src); // Lo guardamos en caché
+                }
+            });
+        });
+        observer.observe(navAvatar, { attributes: true });
+    }
+    // --------------------------------------------
+
     inicializarCatalogoBuscador();
 
+    // Conectar botones si existen en el HTML
     const btnSearchIcon = document.querySelector(".btn-search-icon");
     const btnCloseSearch = document.getElementById("closeSearchOverlay");
     const inputOverlay = document.getElementById("searchInputOverlay");
 
     if (btnSearchIcon) {
-        btnSearchIcon.addEventListener("click", abrirBuscadorFlotante);
+        btnSearchIcon.addEventListener("click", (e) => {
+            e.preventDefault();
+            abrirBuscadorFlotante();
+        });
     }
-    if (btnCloseSearch) {
-        btnCloseSearch.addEventListener("click", cerrarBuscadorFlotante);
-    }
-    if (inputOverlay) {
-        inputOverlay.addEventListener("input", realizarBusquedaFlotante);
-    }
+    
+    if (btnCloseSearch) btnCloseSearch.addEventListener("click", cerrarBuscadorFlotante);
+    if (inputOverlay) inputOverlay.addEventListener("input", realizarBusquedaFlotante);
 });
