@@ -209,11 +209,15 @@ function mostrarAvisoPerfilInfantil() {
 async function cargarCatalogo() {
     try {
         const respuesta = await fetch(`${API_BASE}/contenido`);
-        const lista = await respuesta.json();
+        let lista = await respuesta.json();
 
-        // 🟢 ESTE ES EL AJUSTE FINAL CLAVE 🟢
+        // 🟢 NUEVO: Si es niño, eliminamos todo lo adulto de la memoria global
+        if (esPerfilInfantilActivo()) {
+            lista = lista.filter(item => Number(item.infantil) === 1);
+        }
+
         window.catalogoGlobal = lista;
-        catalogo = lista; // Por si alguna función vieja lo usa
+        catalogo = lista;
 
         const contenedor = document.getElementById("catalogo");
         if (!contenedor) return;
@@ -224,7 +228,6 @@ async function cargarCatalogo() {
             return;
         }
 
-        // Usamos tu función cardContenido
         contenedor.innerHTML = lista.map(item => cardContenido(item)).join(""); 
     } catch (error) {
         console.log("Error al cargar el catálogo:", error);
@@ -430,42 +433,38 @@ async function cargarContinuarViendo() {
     }
 }
 
+// 2. REUTILIZAMOS LA SECCIÓN TMDB PARA MOSTRAR PELÍCULAS INFANTILES
 async function cargarTMDB() {
     const contenedor = document.getElementById("tmdbCatalogo");
-
     if (!contenedor) return;
 
     if (esPerfilInfantilActivo()) {
-        contenedor.innerHTML = "";
-        return;
+        // En lugar de ocultar la fila, le cambiamos el título y mostramos películas de niños
+        const tituloSeccion = contenedor.closest('.section-block')?.querySelector("h2");
+        if (tituloSeccion) tituloSeccion.innerText = "Películas para Niños";
+
+        if (window.catalogoGlobal && window.catalogoGlobal.length > 0) {
+            contenedor.innerHTML = window.catalogoGlobal.slice(0, 12).map(item => cardContenido(item)).join("");
+        } else {
+            contenedor.innerHTML = `<div class="empty-state">No hay películas infantiles disponibles en la base de datos.</div>`;
+        }
+        return; // Detenemos la ejecución aquí para que no llame a la API de TMDb
     }
 
+    // Si NO es niño, carga TMDb normalmente
     try {
         const respuesta = await fetch(`${API_BASE}/tmdb/populares`);
         const peliculas = await respuesta.json();
 
         if (!peliculas || peliculas.length === 0) {
-            contenedor.innerHTML = `
-                <div class="empty-state">
-                    No se pudo cargar TMDb en este momento.
-                </div>
-            `;
+            contenedor.innerHTML = `<div class="empty-state">No se pudo cargar TMDb en este momento.</div>`;
             return;
         }
 
-        contenedor.innerHTML = peliculas
-            .slice(0, 12)
-            .map(item => cardTMDB(item))
-            .join("");
-
+        contenedor.innerHTML = peliculas.slice(0, 12).map(item => cardTMDB(item)).join("");
     } catch (error) {
         console.log("Error al cargar TMDb:", error);
-
-        contenedor.innerHTML = `
-            <div class="empty-state">
-                No se pudo conectar con TMDb.
-            </div>
-        `;
+        contenedor.innerHTML = `<div class="empty-state">No se pudo conectar con TMDb.</div>`;
     }
 }
 
