@@ -42,24 +42,52 @@ function validarAccesoPago() {
     return true;
 }
 
-function cargarResumenPago() {
-    const plan_nombre = localStorage.getItem("plan_nombre");
-    const plan_precio = localStorage.getItem("plan_precio");
+// Variable global para guardar el precio real calculado por el servidor
+let montoFinalProrrateo = 0;
+
+async function cargarResumenPago() {
+    const usuario_id = localStorage.getItem("usuario_id") || sessionStorage.getItem("usuario_id");
+    const plan_id = localStorage.getItem("plan_id");
 
     const nombrePlan = document.getElementById("nombrePlan");
     const precioPlan = document.getElementById("precioPlan");
     const totalPago = document.getElementById("totalPago");
+    const resumenContenedor = document.querySelector(".pago-resumen");
 
-    if (nombrePlan) {
-        nombrePlan.innerText = plan_nombre || "Plan seleccionado";
-    }
+    try {
+        // Llamamos al servidor para que haga la matemática
+        const respuesta = await fetch(`${API_BASE}/api/pagos/calcular/${usuario_id}/${plan_id}`);
+        const calculo = await respuesta.json();
 
-    if (precioPlan) {
-        precioPlan.innerText = `S/ ${Number(plan_precio || 0).toFixed(2)}`;
-    }
+        if (calculo.ok) {
+            nombrePlan.innerText = calculo.plan_nombre;
+            precioPlan.innerText = `S/ ${calculo.precio_original}`;
+            
+            montoFinalProrrateo = calculo.total_pagar; // Guardamos el precio final
 
-    if (totalPago) {
-        totalPago.innerText = `S/ ${Number(plan_precio || 0).toFixed(2)}`;
+            // Si hay un descuento por cambio de plan, agregamos una fila en verde mostrando el cálculo
+            if (calculo.es_upgrade && calculo.descuento > 0) {
+                // Removemos la fila de descuento si ya existía para no duplicarla
+                const filaDescuentoAntigua = document.getElementById("filaDescuentoProrrateo");
+                if (filaDescuentoAntigua) filaDescuentoAntigua.remove();
+
+                const filaDescuento = document.createElement("div");
+                filaDescuento.id = "filaDescuentoProrrateo";
+                filaDescuento.className = "detail-row";
+                filaDescuento.style.color = "#86efac"; // Color verde
+                filaDescuento.innerHTML = `
+                    <span>Saldo a favor (${calculo.dias_restantes} días no usados)</span>
+                    <strong>- S/ ${calculo.descuento}</strong>
+                `;
+                
+                // Lo insertamos justo antes del "Total a pagar"
+                resumenContenedor.insertBefore(filaDescuento, document.querySelector(".total-row"));
+            }
+
+            totalPago.innerText = `S/ ${calculo.total_pagar}`;
+        }
+    } catch (error) {
+        console.error("Error al calcular el precio:", error);
     }
 }
 
@@ -140,6 +168,7 @@ async function confirmarPago(event) {
         localStorage.setItem("plan_nombre_pendiente", plan_nombre || "");
         localStorage.setItem("plan_precio_pendiente", plan_precio);
 
+        // AQUÍ ESTÁ EL CAMBIO: Enviamos el montoFinalProrrateo
         const respuesta = await fetch(`${API_BASE}/mercadopago/crear-preferencia`, {
             method: "POST",
             headers: {
@@ -147,7 +176,8 @@ async function confirmarPago(event) {
             },
             body: JSON.stringify({
                 usuario_id,
-                plan_id
+                plan_id,
+                monto_calculado: typeof montoFinalProrrateo !== 'undefined' ? montoFinalProrrateo : plan_precio
             })
         });
 
@@ -155,12 +185,10 @@ async function confirmarPago(event) {
 
         if (!datos.ok) {
             mostrarMensajePago(datos.mensaje || "No se pudo iniciar el pago con Mercado Pago");
-
             if (botonPago) {
                 botonPago.disabled = false;
                 botonPago.innerText = "Confirmar pago";
             }
-
             return;
         }
 
@@ -169,12 +197,10 @@ async function confirmarPago(event) {
 
         if (!urlPago) {
             mostrarMensajePago("Error de seguridad: La pasarela no está configurada para cobros reales.");
-
             if (botonPago) {
                 botonPago.disabled = false;
                 botonPago.innerText = "Confirmar pago";
             }
-
             return;
         }
 
@@ -183,9 +209,7 @@ async function confirmarPago(event) {
 
     } catch (error) {
         console.log("Error al crear preferencia de Mercado Pago:", error);
-
         mostrarMensajePago("No se pudo conectar con Mercado Pago.");
-
         if (botonPago) {
             botonPago.disabled = false;
             botonPago.innerText = "Confirmar pago";

@@ -1289,52 +1289,167 @@ app.get("/planes", (req, res) => {
     );
 });
 
+/* =========================================
+   3. REGISTRO DE PAGO Y ENVÍO DE BOLETA (VÍA GOOGLE SCRIPT)
+========================================= */
 app.post("/pagos", (req, res) => {
     const { usuario_id, plan_id, metodo_pago, monto } = req.body;
+    
+    // Código único para la boleta (Ej: BOLETA-SV-847261)
+    const codigo_comprobante = "BOLETA-SV-" + Math.floor(Math.random() * 100000000);
 
-    if (!usuario_id || !plan_id || !metodo_pago || !monto) {
-        return res.json({
-            ok: false,
-            mensaje: "Datos incompletos para procesar el pago"
-        });
-    }
+    conexion.query("SELECT nombre, correo FROM usuarios WHERE id = ?", [usuario_id], (errUsuario, usuarios) => {
+        if (errUsuario || usuarios.length === 0) return res.json({ ok: false, mensaje: "Usuario no encontrado" });
+        const usuario = usuarios[0];
 
-    conexion.query(
-        `INSERT INTO pagos(usuario_id, plan_id, metodo_pago, monto, estado)
-         VALUES (?, ?, ?, ?, 'pagado')`,
-        [usuario_id, plan_id, metodo_pago, monto],
-        (error) => {
-            if (error) {
-                console.log(error);
-                return res.json({
-                    ok: false,
-                    mensaje: "Error al registrar el pago"
-                });
-            }
+        conexion.query("SELECT nombre FROM planes WHERE id = ?", [plan_id], (errPlan, planes) => {
+            if (errPlan || planes.length === 0) return res.json({ ok: false, mensaje: "Plan no encontrado" });
+            const planNombre = planes[0].nombre;
 
+            // Registrar el pago
             conexion.query(
-                `INSERT INTO suscripciones(usuario_id, plan_id, estado)
-                 VALUES (?, ?, 'activa')`,
-                [usuario_id, plan_id],
-                (error) => {
-                    if (error) {
-                        console.log(error);
-                        return res.json({
-                            ok: false,
-                            mensaje: "Pago registrado, pero no se pudo activar la suscripción"
-                        });
-                    }
+                "INSERT INTO pagos (usuario_id, plan_id, metodo_pago, monto, estado, codigo_comprobante) VALUES (?, ?, ?, ?, 'pagado', ?)",
+                [usuario_id, plan_id, metodo_pago, monto, codigo_comprobante],
+                (errPago) => {
+                    if (errPago) return res.json({ ok: false, mensaje: "Error al registrar el pago" });
 
-                    res.json({
-                        ok: true,
-                        mensaje: "Pago registrado y suscripción activada"
-                    });
+                    // Desactivar planes viejos y activar el nuevo por 1 mes
+                    conexion.query(
+                        "UPDATE suscripciones SET estado = 'cancelada' WHERE usuario_id = ? AND estado = 'activa'",
+                        [usuario_id],
+                        () => {
+                            conexion.query(
+                                "INSERT INTO suscripciones (usuario_id, plan_id, fecha_inicio, fecha_fin) VALUES (?, ?, NOW(), DATE_ADD(NOW(), INTERVAL 1 MONTH))",
+                                [usuario_id, plan_id],
+                                async (errSuscripcion) => {
+                                    if (errSuscripcion) return res.json({ ok: false, mensaje: "Error al activar suscripción" });
+
+                                    // ENVIAR A GOOGLE APPS SCRIPT
+                                    const fechaHoy = new Date().toLocaleDateString('es-PE');
+                                    
+                                    try {
+                                        await axios.post(process.env.GOOGLE_SCRIPT_URL, {
+                                            tipo: "boleta",
+                                            correo: usuario.correo,
+                                            nombre: usuario.nombre,
+                                            monto: Number(monto).toFixed(2),
+                                            planNombre: planNombre,
+                                            codigo_comprobante: codigo_comprobante,
+                                            metodo_pago: metodo_pago,
+                                            fecha: fechaHoy
+                                        });
+                                    } catch (errorCorreo) {
+                                        console.log("Error contactando a Google Script:", errorCorreo.message);
+                                    }
+
+                                    res.json({ ok: true, mensaje: "Suscripción activada y boleta enviada." });
+                                }
+                            );
+                        }
+                    );
                 }
             );
-        }
-    );
+        });
+    });
 });
+/* =========================================
+   1. CÁLCULO DE PRORRATEO (DESCUENTOS POR CAMBIO DE PLAN)
+========================================= */
+app.get("/api/pagos/calcular/:usuario_id/:nuevo_plan_id", (req, res) => {
+    const { usuario_id, nuevo_plan_id } = req.params;
 
+    conexion.query("SELECT precio, nombre FROM planes WHERE id = ?", [nuevo_plan_id], (err1, planes) => {
+        if (err1 || planes.length === 0) return res.json({ ok: false, mensaje: "Plan no encontrado" });
+        const nuevoPlan = planes[0];
+
+        conexion.query(`
+            SELECT s.plan_id, s.fecha_inicio, s.fecha_fin, p.precio as precio_actual, p.nombre as nombre_actual
+            FROM suscripciones s
+            JOIN planes p ON s.plan_id = p.id
+            WHERE s.usuario_id = ? AND s.estado = 'activa'
+            ORDER BY s.id DESC LIMIT 1
+        `, [usuario_id], (err2, suscripciones) => {
+            if (err2) return res.json({ ok: false, mensaje: "Error al buscar suscripción" });
+
+            let precio_final = Number(nuevoPlan.precio);
+            let descuento = 0;
+            let dias_restantes = 0;
+            let es_upgrade = false;
+
+            if (suscripciones.length > 0 && String(suscripciones[0].plan_id) !== String(nuevo_plan_id)) {
+                const sub = suscripciones[0];
+                const hoy = new Date();
+                const fechaFin = new Date(sub.fecha_fin);
+                const diferenciaMilisegundos = fechaFin - hoy;
+                
+                dias_restantes = Math.ceil(diferenciaMilisegundos / (1000 * 60 * 60 * 24));
+
+                if (dias_restantes > 0) {
+                    es_upgrade = true;
+                    const precioPorDia = Number(sub.precio_actual) / 30;
+                    descuento = precioPorDia * dias_restantes;
+                    precio_final = precio_final - descuento;
+
+                    // El cobro mínimo por Mercado Pago debe ser al menos S/ 3.00
+                    if (precio_final < 3.00) precio_final = 3.00;
+                }
+            }
+
+            res.json({
+                ok: true,
+                plan_nombre: nuevoPlan.nombre,
+                precio_original: Number(nuevoPlan.precio).toFixed(2),
+                descuento: descuento.toFixed(2),
+                total_pagar: precio_final.toFixed(2),
+                dias_restantes: dias_restantes,
+                es_upgrade: es_upgrade
+            });
+        });
+    });
+});
+/* =========================================
+   2. CREAR PREFERENCIA MERCADO PAGO CON DESCUENTO APLICADO
+========================================= */
+app.post("/mercadopago/crear-preferencia", (req, res) => {
+    const { usuario_id, plan_id, monto_calculado } = req.body;
+
+    if (!usuario_id || !plan_id) return res.json({ ok: false, mensaje: "Faltan datos" });
+
+    conexion.query("SELECT * FROM planes WHERE id = ?", [plan_id], async (err, resultados) => {
+        if (err || resultados.length === 0) return res.json({ ok: false, mensaje: "Plan no encontrado" });
+
+        const plan = resultados[0];
+        const precioCobrar = monto_calculado ? Number(monto_calculado) : Number(plan.precio);
+
+        try {
+            const body = {
+                items: [
+                    {
+                        id: String(plan.id),
+                        title: `Suscripción StarView - Plan ${plan.nombre}`,
+                        quantity: 1,
+                        unit_price: precioCobrar, 
+                        currency_id: "PEN"
+                    }
+                ],
+                back_urls: {
+                    success: `${process.env.BASE_URL}/pago-exitoso.html?usuario_id=${usuario_id}&plan_id=${plan.id}&monto=${precioCobrar}`,
+                    failure: `${process.env.BASE_URL}/pago-fallido.html`,
+                    pending: `${process.env.BASE_URL}/pago-pendiente.html`
+                },
+                auto_return: "approved"
+            };
+
+            const preference = new Preference(clienteMP);
+            const respuesta = await preference.create({ body });
+
+            res.json({ ok: true, init_point: respuesta.init_point, sandbox_init_point: respuesta.sandbox_init_point });
+        } catch (error) {
+            console.error("Error al crear preferencia:", error);
+            res.json({ ok: false, mensaje: "Error al generar enlace de pago" });
+        }
+    });
+});
 app.get("/facturacion/:usuario_id", (req, res) => {
     const usuario_id = req.params.usuario_id;
 
