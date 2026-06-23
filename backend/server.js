@@ -1637,7 +1637,7 @@ app.post("/api/stream/iniciar", (req, res) => {
 
     // SOLUCIÓN: Usamos DATE_SUB(NOW()) de MySQL para evitar problemas de zona horaria con Vercel
     conexion.query(
-        "DELETE FROM reproducciones_activas WHERE ultima_actividad < DATE_SUB(NOW(), INTERVAL 1 MINUTE)",
+        "DELETE FROM reproducciones_activas WHERE ultima_actividad < DATE_SUB(NOW(), INTERVAL 25 SECOND)",
         (errLimpieza) => {
             if (errLimpieza) console.error("Error limpiando sesiones:", errLimpieza);
 

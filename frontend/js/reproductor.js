@@ -254,14 +254,14 @@ async function cargarContenido() {
         // 3. Configurar el limitador de calidad del plan obtenido
         configurarSelectorCalidad(datosStream.calidad_maxima);
 
-        // 4. Activar el Heartbeat cada 30 segundos para avisar que seguimos viendo la película
+        // 4. Activar el Heartbeat cada 15 segundos para avisar que seguimos viendo la película
         intervaloHeartbeat = setInterval(async () => {
             await fetch(`${API_BASE}/api/stream/ping`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ usuario_id: usuario_id, dispositivo_token: dispositivoToken })
             });
-        }, 30000);
+        }, 15000); // <-- Cambiado a 15000
 
         if (contenidoActual.genero) cargarRecomendacionesLocales(contenidoActual.genero, contenidoActual.id);
 
@@ -535,16 +535,39 @@ async function cargarRecomendacionesLocales(genero, idActual) {
     } catch (error) { console.log(error); }
 }
 
-// Liberación del dispositivo al cerrar la pestaña o retroceder
-window.addEventListener("beforeunload", () => {
+// =========================================
+// EVENTOS DE CIERRE Y LIBERACIÓN DE PANTALLA
+// =========================================
+
+// Función maestra para liberar la pantalla
+function liberarPantallaInmediatamente() {
     if (intervaloHeartbeat) clearInterval(intervaloHeartbeat);
     guardarProgresoRapido();
     
-    const datosCierre = JSON.stringify({ usuario_id: usuario_id, dispositivo_token: dispositivoToken });
+    // FIX MÁGICO: sendBeacon necesita un "Blob" para que Express entienda que es un JSON
+    const datosCierre = new Blob(
+        [JSON.stringify({ usuario_id: usuario_id, dispositivo_token: dispositivoToken })], 
+        { type: 'application/json' }
+    );
     navigator.sendBeacon(`${API_BASE}/api/stream/cerrar`, datosCierre);
+}
+
+// 1. Si cierra la pestaña o recarga la página
+window.addEventListener("beforeunload", liberarPantallaInmediatamente);
+
+// 2. Si minimiza el navegador en el celular o cambia de pestaña
+document.addEventListener("visibilitychange", () => { 
+    if (document.hidden) {
+        guardarProgresoRapido(); 
+    }
 });
 
-document.addEventListener("visibilitychange", () => { if (document.hidden) guardarProgresoRapido(); });
+// 3. Forzar liberación si hace clic en el botón de "Volver al catálogo" o el logo
+document.querySelectorAll("a[href='home.html']").forEach(enlace => {
+    enlace.addEventListener("click", () => {
+        liberarPantallaInmediatamente();
+    });
+});
 
 document.addEventListener("keydown", (event) => {
     if (event.key === "Escape") {
