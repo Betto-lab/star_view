@@ -109,29 +109,27 @@ function realizarBusquedaFlotante() {
 
 // 5. CONECTAR LOS BOTONES CUANDO LA PÁGINA CARGUE
 
+// 3. ACTUALIZAR INICIALIZACIÓN (CON CACHÉ SEGURO)
 document.addEventListener("DOMContentLoaded", () => {
     
-    // --- SOLUCIÓN AL PARPADEO DEL AVATAR ---
+    // --- CACHÉ DE AVATAR SIN OCULTAR ELEMENTOS ---
     const navAvatar = document.getElementById("navAvatar");
     const perfil_id = localStorage.getItem("perfil_id") || sessionStorage.getItem("perfil_id");
 
     if (navAvatar && perfil_id) {
-        // Creamos una llave única para el perfil actual
+        navAvatar.style.opacity = "1"; // Forzamos que siempre sea visible por seguridad
         const cacheKey = "avatar_cache_" + perfil_id;
         const avatarCache = localStorage.getItem(cacheKey);
         
-        // Si ya sabemos el color por visitas previas, lo ponemos al instante
         if (avatarCache) {
-            navAvatar.src = avatarCache;
-            navAvatar.classList.add("visible"); 
+            navAvatar.src = avatarCache; // Aplicamos el caché instantáneamente
         }
 
-        // Observamos si tus otros archivos (como home.js) cambian la imagen desde la BD
+        // Guardamos el nuevo avatar silenciosamente cuando el servidor lo envíe
         const observer = new MutationObserver((mutations) => {
             mutations.forEach((mutation) => {
-                if (mutation.attributeName === "src") {
-                    navAvatar.classList.add("visible"); // Lo hacemos aparecer
-                    localStorage.setItem(cacheKey, navAvatar.src); // Lo guardamos para la próxima
+                if (mutation.attributeName === "src" && !navAvatar.src.includes("Red.jpg")) {
+                    localStorage.setItem(cacheKey, navAvatar.src);
                 }
             });
         });
@@ -141,7 +139,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
     inicializarCatalogoBuscador();
 
-    // Conectar botones del buscador
     const btnSearchIcon = document.querySelector(".btn-search-icon");
     const btnCloseSearch = document.getElementById("closeSearchOverlay");
     const inputOverlay = document.getElementById("searchInputOverlay");

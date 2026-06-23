@@ -160,7 +160,7 @@ app.post("/registro", async (req, res) => {
     }
 
     // ==========================================
-    //  AQUÍ ENTRA LA GUILLOTINA BACKEND (DNS) 
+    // 🔥 AQUÍ ENTRA LA GUILLOTINA BACKEND (DNS) 🔥
     // ==========================================
     const esReal = await dominioAceptaCorreos(correo);
     if (!esReal) {
@@ -1289,95 +1289,6 @@ app.get("/planes", (req, res) => {
     );
 });
 
-app.post("/mercadopago/crear-preferencia", (req, res) => {
-    const { usuario_id, plan_id } = req.body;
-
-    if (!clienteMP) {
-        return res.json({
-            ok: false,
-            mensaje: "Mercado Pago no está configurado. Falta MP_ACCESS_TOKEN."
-        });
-    }
-
-    if (!usuario_id || !plan_id) {
-        return res.json({
-            ok: false,
-            mensaje: "Datos incompletos para crear la preferencia de pago"
-        });
-    }
-
-    conexion.query(
-        "SELECT * FROM planes WHERE id = ?",
-        [plan_id],
-        async (error, resultados) => {
-            if (error) {
-                console.log("Error al buscar plan:", error);
-
-                return res.json({
-                    ok: false,
-                    mensaje: "Error al buscar el plan"
-                });
-            }
-
-            if (resultados.length === 0) {
-                return res.json({
-                    ok: false,
-                    mensaje: "Plan no encontrado"
-                });
-            }
-
-            const plan = resultados[0];
-            const baseUrl = process.env.BASE_URL || "https://star-view-steel.vercel.app";
-
-            try {
-                const preference = new Preference(clienteMP);
-
-                const resultado = await preference.create({
-                    body: {
-                        items: [
-                            {
-                                id: String(plan.id),
-                                title: `Plan ${plan.nombre} - StarView`,
-                                description: `Suscripción al plan ${plan.nombre}`,
-                                quantity: 1,
-                                currency_id: "PEN",
-                                unit_price: Number(plan.precio)
-                            }
-                        ],
-                        metadata: {
-                            usuario_id: Number(usuario_id),
-                            plan_id: Number(plan.id)
-                        },
-                        external_reference: `${usuario_id}-${plan.id}-${Date.now()}`,
-                        back_urls: {
-                            success: `${baseUrl}/pago-exitoso.html?usuario_id=${usuario_id}&plan_id=${plan.id}&monto=${plan.precio}`,
-                            failure: `${baseUrl}/pago-fallido.html`,
-                            pending: `${baseUrl}/pago-pendiente.html`
-                        },
-                        auto_return: "approved"
-                    }
-                });
-
-                res.json({
-                    ok: true,
-                    mensaje: "Preferencia creada correctamente",
-                    preference_id: resultado.id,
-                    init_point: resultado.init_point,
-                    sandbox_init_point: resultado.sandbox_init_point
-                });
-
-            } catch (errorMP) {
-                console.log("Error al crear preferencia de Mercado Pago:", errorMP);
-
-                res.json({
-                    ok: false,
-                    mensaje: "No se pudo crear la preferencia de pago"
-                });
-            }
-        }
-    );
-});
-
 app.post("/pagos", (req, res) => {
     const { usuario_id, plan_id, metodo_pago, monto } = req.body;
 
@@ -1724,15 +1635,12 @@ app.post("/api/stream/iniciar", (req, res) => {
         return res.json({ ok: false, mensaje: "Faltan datos de sesión." });
     }
 
-    // Limpieza: Eliminamos dispositivos inactivos por más de 1 minuto
-    const tiempoLimite = new Date(Date.now() - 60 * 1000); 
+    // SOLUCIÓN: Usamos DATE_SUB(NOW()) de MySQL para evitar problemas de zona horaria con Vercel
     conexion.query(
-        "DELETE FROM reproducciones_activas WHERE ultima_actividad < ?",
-        [tiempoLimite],
+        "DELETE FROM reproducciones_activas WHERE ultima_actividad < DATE_SUB(NOW(), INTERVAL 1 MINUTE)",
         (errLimpieza) => {
             if (errLimpieza) console.error("Error limpiando sesiones:", errLimpieza);
 
-            // Consultamos el plan del usuario usando tus nombres de columnas exactos
             conexion.query(
                 `SELECT s.estado, p.pantallas, p.calidad 
                  FROM suscripciones s
@@ -1746,8 +1654,9 @@ app.post("/api/stream/iniciar", (req, res) => {
                     }
 
                     const limites = suscripcion[0];
+                    // Aseguramos que sea un número real, por si la BD devuelve un texto
+                    const maxPantallas = parseInt(limites.pantallas) || 1; 
 
-                    // Contamos cuántas pantallas distintas están activas
                     conexion.query(
                         "SELECT dispositivo_token FROM reproducciones_activas WHERE usuario_id = ?",
                         [usuario_id],
@@ -1756,16 +1665,15 @@ app.post("/api/stream/iniciar", (req, res) => {
 
                             const yaEstaReproduciendo = activas.some(a => a.dispositivo_token === dispositivo_token);
 
-                            // Si excede el límite (1, 2 o 4 pantallas) bloqueamos
-                            if (activas.length >= limites.pantallas && !yaEstaReproduciendo) {
+                            // Validamos contra el número real de pantallas de su plan (1, 2 o 4)
+                            if (activas.length >= maxPantallas && !yaEstaReproduciendo) {
                                 return res.json({ 
                                     ok: false, 
                                     limiteExcedido: true,
-                                    mensaje: `Tu plan solo permite ${limites.pantallas} pantalla(s) en simultáneo.` 
+                                    mensaje: `Tu plan actual solo permite ${maxPantallas} pantalla(s) en simultáneo. Cierra otra ventana.` 
                                 });
                             }
 
-                            // Registramos o actualizamos la pantalla
                             conexion.query(
                                 `INSERT INTO reproducciones_activas (usuario_id, dispositivo_token, ultima_actividad) 
                                  VALUES (?, ?, NOW()) 
@@ -1776,7 +1684,7 @@ app.post("/api/stream/iniciar", (req, res) => {
                                     
                                     res.json({ 
                                         ok: true, 
-                                        calidad_maxima: limites.calidad, // "HD", "Full HD" o "Ultra HD"
+                                        calidad_maxima: limites.calidad,
                                         mensaje: "Streaming autorizado." 
                                     });
                                 }
