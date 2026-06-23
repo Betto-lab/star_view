@@ -2525,3 +2525,14 @@ textarea:focus{
         padding: 14px 20px;
     }
 }
+/* =========================================
+   PREVENIR PARPADEO DEL AVATAR ROJO
+========================================= */
+#navAvatar {
+    opacity: 0 !important; /* Lo ocultamos apenas nace */
+    transition: opacity 0.3s ease; /* Le damos una aparición suave */
+}
+
+#navAvatar.visible {
+    opacity: 1 !important; /* El JS le pondrá esta clase cuando esté listo */
+}

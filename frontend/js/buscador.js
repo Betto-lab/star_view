@@ -108,37 +108,40 @@ function realizarBusquedaFlotante() {
 }
 
 // 5. CONECTAR LOS BOTONES CUANDO LA PÁGINA CARGUE
+
 document.addEventListener("DOMContentLoaded", () => {
     
-    // --- SOLUCIÓN AL PARPADEO DEL AVATAR ROJO ---
+    // --- SOLUCIÓN AL PARPADEO DEL AVATAR ---
     const navAvatar = document.getElementById("navAvatar");
-    if (navAvatar) {
-        // Verificamos si tenemos el avatar guardado en la caché local
-        const avatarCache = localStorage.getItem("avatar_cache_global");
+    const perfil_id = localStorage.getItem("perfil_id") || sessionStorage.getItem("perfil_id");
+
+    if (navAvatar && perfil_id) {
+        // Creamos una llave única para el perfil actual
+        const cacheKey = "avatar_cache_" + perfil_id;
+        const avatarCache = localStorage.getItem(cacheKey);
         
+        // Si ya sabemos el color por visitas previas, lo ponemos al instante
         if (avatarCache) {
-            navAvatar.src = avatarCache; // Lo aplicamos inmediatamente sin esperar al servidor
-        } else {
-            navAvatar.style.opacity = "0"; // Si no hay caché, lo ocultamos un segundo para evitar el rojo
-            navAvatar.style.transition = "opacity 0.3s ease";
+            navAvatar.src = avatarCache;
+            navAvatar.classList.add("visible"); 
         }
 
-        // Creamos un observador para detectar cuando el servidor (en cargarDatosTopbar) responda con la imagen
+        // Observamos si tus otros archivos (como home.js) cambian la imagen desde la BD
         const observer = new MutationObserver((mutations) => {
             mutations.forEach((mutation) => {
                 if (mutation.attributeName === "src") {
-                    navAvatar.style.opacity = "1"; // Lo mostramos
-                    localStorage.setItem("avatar_cache_global", navAvatar.src); // Lo guardamos en caché
+                    navAvatar.classList.add("visible"); // Lo hacemos aparecer
+                    localStorage.setItem(cacheKey, navAvatar.src); // Lo guardamos para la próxima
                 }
             });
         });
         observer.observe(navAvatar, { attributes: true });
     }
-    // --------------------------------------------
+    // ----------------------------------------
 
     inicializarCatalogoBuscador();
 
-    // Conectar botones si existen en el HTML
+    // Conectar botones del buscador
     const btnSearchIcon = document.querySelector(".btn-search-icon");
     const btnCloseSearch = document.getElementById("closeSearchOverlay");
     const inputOverlay = document.getElementById("searchInputOverlay");
@@ -146,7 +149,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (btnSearchIcon) {
         btnSearchIcon.addEventListener("click", (e) => {
             e.preventDefault();
-            abrirBuscadorFlotante();
+            abrirBuscadorFlotante(e);
         });
     }
     
