@@ -20,6 +20,9 @@
                 <img src="img/Red.jpg" id="navAvatar" class="nav-perfil-avatar" alt="Perfil">
                 <span class="nav-perfil-arrow">▼</span>
             </div>
+            <div class="search-container">
+                <button class="btn-search-icon" style="background: transparent; border: none; color: white; font-size: 20px; cursor: pointer;">🔍</button>
+            </div>
             <div class="dropdown-menu">
                 <div style="padding: 10px 20px; font-weight: bold; border-bottom: 1px solid rgba(255,255,255,0.1); margin-bottom: 5px;" id="navNombrePerfil">Cargando...</div>
                 
@@ -189,5 +192,13 @@
         cargarDatosTopbar();
     });
 </script>
+<script src="js/buscador.js"></script>
+<div id="searchOverlay" class="search-overlay oculto">
+    <div class="search-overlay-header">
+        <button id="closeSearchOverlay">✖</button>
+        <input type="text" id="searchInputOverlay" placeholder="Escribe una película, serie o género...">
+    </div>
+    <div id="searchResults" class="catalogo"></div> 
+</div>
 </body>
 </html>
