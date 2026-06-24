@@ -61,7 +61,34 @@ async function verificarAccesoCatalogo() {
         const respuesta = await fetch(`${API_BASE}/suscripcion/${usuarioId}`);
         const suscripcion = await respuesta.json();
 
-        if (!suscripcion || !suscripcion.estado || suscripcion.estado !== "activa") {
+        // 1. Si no hay suscripción, lo botamos
+        if (!suscripcion || !suscripcion.estado) {
+            window.location.href = "planes.html";
+            return false;
+        }
+
+        let accesoPermitido = false;
+
+        // 2. Si está activa, pasa de frente
+        if (suscripcion.estado === "activa") {
+            accesoPermitido = true;
+        } 
+        // 3. Si está cancelada, verificamos si su fecha aún no ha vencido
+        else if (suscripcion.estado === "cancelada" && suscripcion.fecha_fin) {
+            const hoy = new Date();
+            const fechaFin = new Date(suscripcion.fecha_fin);
+            
+            // Igulamos las horas a cero para comparar solo los días exactos
+            hoy.setHours(0, 0, 0, 0);
+            fechaFin.setHours(0, 0, 0, 0);
+
+            if (hoy <= fechaFin) {
+                accesoPermitido = true; // Todavía tiene tiempo, ¡déjalo pasar!
+            }
+        }
+
+        // Si después de revisar, no tiene permiso, recién lo botamos a pagar
+        if (!accesoPermitido) {
             window.location.href = "planes.html";
             return false;
         }
