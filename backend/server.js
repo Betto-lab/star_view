@@ -1795,23 +1795,18 @@ app.put("/suscripcion/cancelar/:id", (req, res) => {
         });
     }
 
-    const fechaFin = new Date();
-    fechaFin.setMonth(fechaFin.getMonth() + 1);
-    const fechaFinSQL = fechaFin.toISOString().split("T")[0];
-
+    // SOLUCIÓN: Solo actualizamos el estado y el motivo. Ya NO tocamos la fecha_fin.
     conexion.query(
         `UPDATE suscripciones
          SET estado = 'cancelada',
              renovacion_automatica = 0,
              motivo_cancelacion = ?,
-             fecha_cancelacion = NOW(),
-             fecha_fin = ?
+             fecha_cancelacion = NOW()
          WHERE id = ?`,
-        [motivo_cancelacion, fechaFinSQL, id],
+        [motivo_cancelacion, id],
         (error) => {
             if (error) {
                 console.log(error);
-
                 return res.json({
                     ok: false,
                     mensaje: "No se pudo cancelar la suscripción"
@@ -1820,12 +1815,11 @@ app.put("/suscripcion/cancelar/:id", (req, res) => {
 
             res.json({
                 ok: true,
-                mensaje: "Suscripción cancelada. Mantendrás acceso hasta el fin del mes pagado."
+                mensaje: "Suscripción cancelada. Mantendrás acceso hasta el fin de tus 30 días."
             });
         }
     );
 });
-
 /* =========================================
    SISTEMA DE RECOMENDACIONES LOCALES MULTI-GÉNERO
 ========================================= */
@@ -2059,11 +2053,11 @@ app.post("/api/stream/iniciar", (req, res) => {
             }
 
             conexion.query(
-                `SELECT s.estado, p.pantallas, p.calidad
+                `SELECT s.estado, s.fecha_fin, p.pantallas, p.calidad
                  FROM suscripciones s
                  INNER JOIN planes p ON s.plan_id = p.id
                  WHERE s.usuario_id = ?
-                 AND s.estado = 'activa'
+                 AND (s.estado = 'activa' OR (s.estado = 'cancelada' AND s.fecha_fin >= NOW()))
                  ORDER BY s.id DESC
                  LIMIT 1`,
                 [usuario_id],

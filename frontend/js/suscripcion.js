@@ -42,7 +42,7 @@ async function cargarSuscripcion() {
 
             <div class="info-row">
                 <span>Estado</span>
-                <strong>${suscripcion.estado}</strong>
+                <strong style="text-transform: capitalize;">${suscripcion.estado}</strong>
             </div>
 
             <div class="info-row">
@@ -56,8 +56,8 @@ async function cargarSuscripcion() {
             </div>
 
             <div class="info-row">
-                <span>Renovación automática</span>
-                <strong>${suscripcion.renovacion_automatica == 1 ? "Activa" : "Desactivada"}</strong>
+                <span>Tipo de plan</span>
+                <strong>Prepago (30 Días)</strong>
             </div>
 
             <div class="info-row">
@@ -67,13 +67,16 @@ async function cargarSuscripcion() {
 
             ${suscripcion.estado === "activa" ? `
                 <label for="motivoCancelacion">Motivo de cancelación</label>
-                <textarea id="motivoCancelacion" placeholder="Escribe el motivo de cancelación"></textarea>
+                <textarea id="motivoCancelacion" placeholder="Escribe el motivo por el cual ya no deseas continuar"></textarea>
 
                 <button class="btn btn-secondary btn-full" onclick="cancelarSuscripcion(${suscripcion.id})">
                     Cancelar suscripción
                 </button>
             ` : `
-                <p class="cancelada">Suscripción cancelada. No se realizará renovación automática.</p>
+                <div style="background: rgba(251, 191, 36, 0.1); padding: 15px; border-radius: 8px; border: 1px solid #fbbf24; text-align: center; margin-top: 20px;">
+                    <p style="color: #fbbf24; margin: 0; font-weight: bold;">Suscripción cancelada</p>
+                    <p style="color: #e2e8f0; font-size: 14px; margin: 5px 0 0 0;">Podrás seguir viendo contenido hasta tu fecha de caducidad.</p>
+                </div>
             `}
         `;
     } catch (error) {
