@@ -2200,15 +2200,15 @@ app.post("/api/stream/cerrar", (req, res) => {
 app.get("/api/pagos/recibo/:id", (req, res) => {
     const pagoId = req.params.id;
 
-    // 1. CORRECCIÓN SQL: Usamos fecha_pago y codigo_comprobante según tu HeidiSQL
+    // Usamos p.plan_id que vimos en tu HeidiSQL
     const queryBoleta = `
         SELECT 
             p.codigo_comprobante,
             p.monto,
             p.metodo_pago,
             DATE_FORMAT(p.fecha_pago, '%d/%m/%Y') AS fecha,
-            u.nombre,
-            COALESCE((SELECT s.plan FROM suscripciones s WHERE s.usuario_id = u.id ORDER BY s.id DESC LIMIT 1), 'Básico') AS planNombre
+            p.plan_id,
+            u.nombre
         FROM pagos p
         JOIN usuarios u ON p.usuario_id = u.id
         WHERE p.id = ?
@@ -2226,6 +2226,11 @@ app.get("/api/pagos/recibo/:id", (req, res) => {
 
         const pago = resultados[0];
 
+        // Traducimos el plan_id a texto (Ajusta los nombres si tus planes se llaman distinto)
+        let planNombre = "Básico";
+        if (Number(pago.plan_id) === 2) planNombre = "Estándar";
+        if (Number(pago.plan_id) === 3) planNombre = "Premium";
+
         // --- CÁLCULOS TRIBUTARIOS SUNAT (IGV 18%) ---
         const totalNum = parseFloat(pago.monto) || 0;
         const subtotalNum = totalNum / 1.18;
@@ -2236,7 +2241,6 @@ app.get("/api/pagos/recibo/:id", (req, res) => {
         const totalStr = totalNum.toFixed(2);
 
         // --- SERIE DE BOLETA ELECTRÓNICA ---
-        // Tu BD guarda "BOLETA-SV-20466966". Extraemos solo los números para la SUNAT.
         const numerosComprobante = String(pago.codigo_comprobante).replace(/[^0-9]/g, '');
         const correlativo = numerosComprobante.padStart(8, '0').slice(-8); 
         const serieBoleta = `B001-${correlativo}`;
@@ -2311,7 +2315,7 @@ app.get("/api/pagos/recibo/:id", (req, res) => {
                     <tbody>
                         <tr>
                             <td>1</td>
-                            <td>Suscripción Mensual StarView - Plan ${pago.planNombre}</td>
+                            <td>Suscripción Mensual StarView - Plan ${planNombre}</td>
                             <td style="text-align: right;">S/ ${subtotalStr}</td>
                             <td style="text-align: right;">S/ ${subtotalStr}</td>
                         </tr>
