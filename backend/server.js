@@ -2302,6 +2302,32 @@ app.post("/api/suscripciones/cancelar", (req, res) => {
     );
 });
 /* =========================================
+   ELIMINAR PELÍCULA DEFINITIVAMENTE (HARD DELETE)
+========================================= */
+app.delete("/api/admin/contenido/:id", (req, res) => {
+    const id = req.params.id;
+
+    // 1. Borramos los registros huérfanos en "Mi Lista"
+    conexion.query("DELETE FROM mi_lista WHERE contenido_id = ?", [id], (errLista) => {
+        if (errLista) console.error("Error al limpiar Mi Lista:", errLista);
+
+        // 2. Borramos los registros huérfanos en el "Historial"
+        conexion.query("DELETE FROM historial WHERE contenido_id = ?", [id], (errHistorial) => {
+            if (errHistorial) console.error("Error al limpiar Historial:", errHistorial);
+
+            // 3. Finalmente, con las llaves foráneas libres, borramos la película real
+            conexion.query("DELETE FROM contenido WHERE id = ?", [id], (errContenido) => {
+                if (errContenido) {
+                    console.error("Error al eliminar la película de la BD:", errContenido);
+                    return res.json({ ok: false, mensaje: "Error en la base de datos al eliminar." });
+                }
+                
+                res.json({ ok: true, mensaje: "Película eliminada definitivamente." });
+            });
+        });
+    });
+});
+/* =========================================
    PANEL DE ADMINISTRACIÓN (CRM + CMS COMPLETO)
 ========================================= */
 app.get("/panel-admin/:usuario_id", (req, res) => {
