@@ -2275,7 +2275,7 @@ app.get("/api/admin/stats/:usuario_id", (req, res) => {
         const correoUsuario = usuarios[0].correo;
         
         // 🚨 AQUÍ PONES EL CORREO QUE SERÁ EL ADMINISTRADOR OFICIAL
-        const CORREO_ADMINISTRADOR = "admin@starview.com"; 
+        const CORREO_ADMINISTRADOR = "soporte.starview@gmail.com"; 
 
         if (correoUsuario !== CORREO_ADMINISTRADOR) {
             return res.status(403).json({ ok: false, mensaje: "Acceso denegado. No tienes permisos de administrador." });
