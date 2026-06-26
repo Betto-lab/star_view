@@ -114,14 +114,12 @@ async function iniciarSesion() {
 
         // --- DESVÍO DE ROLES (RBAC) ---
         setTimeout(() => {
-            // 🚨 PON AQUÍ EL CORREO EXACTO DEL ADMINISTRADOR
             const CORREO_ADMIN = "soporte.starview@gmail.com"; 
 
-            // Si es el administrador, va al panel de control
             if (correo === CORREO_ADMIN) {
-                window.location.href = "admin.html";
+                // AQUÍ ESTÁ LA MAGIA: Apuntamos al backend, no a un archivo
+                window.location.href = `${API_BASE}/panel-admin/${usuarioId}`;
             } else {
-                // Si es un cliente normal, va a perfiles (o a la página de donde venía)
                 const volver = localStorage.getItem("volver_despues_login");
                 if (volver) {
                     localStorage.removeItem("volver_despues_login");

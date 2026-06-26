@@ -2261,50 +2261,126 @@ app.post("/api/suscripciones/cancelar", (req, res) => {
     );
 });
 /* =========================================
-   PANEL DE ADMINISTRACIÓN (DASHBOARD PROTEGIDO)
+   PANEL DE ADMINISTRACIÓN (RENDERIZADO SEGURO DESDE EL SERVIDOR)
 ========================================= */
-app.get("/api/admin/stats/:usuario_id", (req, res) => {
+app.get("/panel-admin/:usuario_id", (req, res) => {
     const { usuario_id } = req.params;
 
-    // 1. PRIMERA CAPA DE SEGURIDAD: Verificar quién está pidiendo la información
+    // 1. CAPA DE SEGURIDAD ABSOLUTA
     conexion.query("SELECT correo FROM usuarios WHERE id = ?", [usuario_id], (errAdmin, usuarios) => {
-        if (errAdmin || usuarios.length === 0) {
-            return res.status(403).json({ ok: false, mensaje: "Usuario no encontrado." });
+        if (errAdmin || usuarios.length === 0) return res.send("<h1>Usuario no encontrado</h1>");
+
+        const CORREO_ADMINISTRADOR = "admin@starview.com"; // 🚨 RECUERDA PONER TU CORREO AQUÍ
+
+        if (usuarios[0].correo !== CORREO_ADMINISTRADOR) {
+            // Si un curioso intenta entrar a esta ruta, el servidor lo patea al inicio en silencio
+            return res.redirect("/home.html"); 
         }
 
-        const correoUsuario = usuarios[0].correo;
-        
-        // 🚨 AQUÍ PONES EL CORREO QUE SERÁ EL ADMINISTRADOR OFICIAL
-        const CORREO_ADMINISTRADOR = "soporte.starview@gmail.com"; 
+        // 2. SI ES EL JEFE, CALCULAMOS TODO EN UNA SOLA CONSULTA OPTIMIZADA
+        const queryStats = `
+            SELECT 
+                (SELECT COUNT(*) FROM usuarios WHERE correo != ?) AS total_usuarios,
+                (SELECT SUM(monto) FROM pagos WHERE estado = 'pagado') AS ingresos,
+                (SELECT COUNT(*) FROM suscripciones WHERE estado = 'activa') AS activas
+        `;
 
-        if (correoUsuario !== CORREO_ADMINISTRADOR) {
-            return res.status(403).json({ ok: false, mensaje: "Acceso denegado. No tienes permisos de administrador." });
-        }
+        const queryCRM = `
+            SELECT u.id, u.nombre, u.correo, DATE_FORMAT(u.fecha_registro, '%d/%m/%Y') as fecha_registro,
+                   COALESCE((SELECT s.estado FROM suscripciones s WHERE s.usuario_id = u.id ORDER BY s.id DESC LIMIT 1), 'Sin suscripción') AS estado_suscripcion
+            FROM usuarios u 
+            WHERE u.correo != ? 
+            ORDER BY u.id DESC
+        `;
 
-        // 2. SI PASA LA SEGURIDAD, RECIÉN HACEMOS LOS CÁLCULOS
-        const queryUsuarios = "SELECT COUNT(*) AS total FROM usuarios";
-        const queryIngresos = "SELECT SUM(monto) AS total_ingresos FROM pagos WHERE estado = 'pagado'";
-        const querySuscripciones = "SELECT COUNT(*) AS activas FROM suscripciones WHERE estado = 'activa'";
-
-        conexion.query(queryUsuarios, (err1, resUsuarios) => {
-            if (err1) return res.json({ ok: false });
-            
-            conexion.query(queryIngresos, (err2, resIngresos) => {
-                if (err2) return res.json({ ok: false });
+        conexion.query(queryStats, [CORREO_ADMINISTRADOR], (errStats, resStats) => {
+            conexion.query(queryCRM, [CORREO_ADMINISTRADOR], (errCRM, resCRM) => {
                 
-                conexion.query(querySuscripciones, (err3, resSuscripciones) => {
-                    if (err3) return res.json({ ok: false });
+                const stats = resStats[0] || {};
+                const clientes = resCRM || [];
 
-                    res.json({
-                        ok: true,
-                        usuarios: resUsuarios[0].total || 0,
-                        ingresos: Number(resIngresos[0].total_ingresos || 0).toFixed(2),
-                        suscripciones_activas: resSuscripciones[0].activas || 0
-                    });
-                });
+                // 3. ARMAMOS LA TABLA DE CLIENTES
+                const filasHTML = clientes.map(u => {
+                    let claseBadge = "sin-suscripcion";
+                    if (u.estado_suscripcion === "activa") claseBadge = "activa";
+                    if (u.estado_suscripcion === "cancelada") claseBadge = "cancelada";
+
+                    return `
+                        <tr>
+                            <td>#${u.id}</td>
+                            <td style="font-weight: bold;">${u.nombre}</td>
+                            <td style="color: #94a3b8;">${u.correo}</td>
+                            <td>${u.fecha_registro}</td>
+                            <td><span class="badge ${claseBadge}">${u.estado_suscripcion}</span></td>
+                        </tr>
+                    `;
+                }).join("");
+
+                // 4. EL SERVIDOR "FABRICA" Y ENVÍA EL HTML SEGURO
+                const html = `
+                <!DOCTYPE html>
+                <html lang="es">
+                <head>
+                    <meta charset="UTF-8">
+                    <title>Admin - StarView</title>
+                    <style>
+                        body { margin: 0; padding: 0; font-family: 'Arial', sans-serif; background-color: #0b0f19; color: #ffffff; }
+                        .admin-header { background-color: #151a23; padding: 20px 40px; border-bottom: 1px solid #1f2937; display: flex; justify-content: space-between; align-items: center; }
+                        .admin-header h1 { color: #e50914; margin: 0; font-size: 24px; letter-spacing: 2px; }
+                        .container { padding: 40px; max-width: 1200px; margin: 0 auto; }
+                        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; margin-bottom: 40px; }
+                        .stat-card { background: linear-gradient(145deg, #1f2937, #151a23); border: 1px solid rgba(255,255,255,0.05); padding: 30px; border-radius: 12px; }
+                        .stat-card h3 { margin: 0 0 10px 0; color: #94a3b8; font-size: 16px; text-transform: uppercase; }
+                        .stat-card .value { font-size: 40px; font-weight: bold; margin: 0; color: #ffffff; }
+                        .stat-card.ingresos .value { color: #4ade80; }
+                        .btn-volver { background: transparent; color: #cbd5e1; border: 1px solid #cbd5e1; padding: 8px 16px; border-radius: 6px; cursor: pointer; text-decoration: none; }
+                        .btn-volver:hover { background: rgba(255,255,255,0.1); }
+                        .crm-table-container { background: #151a23; border-radius: 12px; border: 1px solid #1f2937; overflow: hidden; }
+                        table { width: 100%; border-collapse: collapse; text-align: left; }
+                        th, td { padding: 15px 20px; border-bottom: 1px solid #1f2937; }
+                        th { background-color: #0b0f19; color: #94a3b8; font-size: 14px; text-transform: uppercase; }
+                        .badge { padding: 5px 10px; border-radius: 999px; font-size: 12px; font-weight: bold; text-transform: uppercase; }
+                        .badge.activa { background: rgba(74, 222, 128, 0.2); color: #4ade80; border: 1px solid #4ade80; }
+                        .badge.cancelada { background: rgba(251, 191, 36, 0.2); color: #fbbf24; border: 1px solid #fbbf24; }
+                        .badge.sin-suscripcion { background: rgba(148, 163, 184, 0.2); color: #94a3b8; border: 1px solid #94a3b8; }
+                    </style>
+                </head>
+                <body>
+                    <header class="admin-header">
+                        <h1>STARVIEW <span style="color: #fff; font-size: 18px;">ADMIN</span></h1>
+                        <button onclick="cerrarSesionAdmin()" class="btn-volver">🚪 Cerrar Sesión</button>
+                    </header>
+                    <div class="container">
+                        <h2 style="margin-bottom: 30px;">Resumen del Negocio</h2>
+                        <div class="stats-grid">
+                            <div class="stat-card"><h3>👥 Clientes</h3><p class="value">${stats.total_usuarios}</p></div>
+                            <div class="stat-card"><h3>⭐ Subs. Activas</h3><p class="value">${stats.activas}</p></div>
+                            <div class="stat-card ingresos"><h3>💰 Ingresos Totales</h3><p class="value">S/ ${Number(stats.ingresos || 0).toFixed(2)}</p></div>
+                        </div>
+                        <h2 style="margin-bottom: 20px;">Gestión de Clientes (CRM)</h2>
+                        <div class="crm-table-container">
+                            <table>
+                                <thead><tr><th>ID</th><th>Cliente</th><th>Correo</th><th>Registro</th><th>Estado</th></tr></thead>
+                                <tbody>
+                                    ${filasHTML || '<tr><td colspan="5" style="text-align: center; color: #94a3b8;">No hay clientes aún.</td></tr>'}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <script>
+                        function cerrarSesionAdmin() {
+                            localStorage.clear();
+                            sessionStorage.clear();
+                            window.location.href = "/login.html";
+                        }
+                    </script>
+                </body>
+                </html>
+                `;
+                
+                res.send(html);
             });
         });
     });
 });
-
 module.exports = app;
