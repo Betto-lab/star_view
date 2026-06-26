@@ -2195,7 +2195,7 @@ app.post("/api/stream/cerrar", (req, res) => {
 });
 
 /* =========================================
-   REPRESENTACIÓN IMPRESA DE BOLETA (WEB / SUNAT)
+   REPRESENTACIÓN IMPRESA DE BOLETA (CLON SUNAT EXACTO)
 ========================================= */
 app.get("/api/pagos/recibo/:id", (req, res) => {
     const pagoId = req.params.id;
@@ -2242,127 +2242,248 @@ app.get("/api/pagos/recibo/:id", (req, res) => {
         // --- SERIE DE BOLETA ELECTRÓNICA ---
         const numerosComprobante = String(pago.codigo_comprobante).replace(/[^0-9]/g, '');
         const correlativo = numerosComprobante.padStart(8, '0').slice(-8); 
-        const serieBoleta = `B001-${correlativo}`;
+        const serieBoleta = `EB01-${correlativo}`; // Usando EB01 como en tu imagen
 
+        // --- CONVERSOR DE NÚMEROS A LETRAS (OBLIGATORIO EN SUNAT) ---
+        function numeroALetras(num) {
+            const unidades = ["CERO", "UN", "DOS", "TRES", "CUATRO", "CINCO", "SEIS", "SIETE", "OCHO", "NUEVE", "DIEZ", "ONCE", "DOCE", "TRECE", "CATORCE", "QUINCE", "DIECISEIS", "DIECISIETE", "DIECIOCHO", "DIECINUEVE", "VEINTE"];
+            const decenas = ["", "", "VEINTI", "TREINTA", "CUARENTA", "CINCUENTA", "SESENTA", "SETENTA", "OCHENTA", "NOVENTA"];
+            if (num <= 20) return unidades[num];
+            if (num < 30) return "VEINTI" + unidades[num-20];
+            let d = Math.floor(num/10);
+            let u = num % 10;
+            return decenas[d] + (u > 0 ? " Y " + unidades[u] : "");
+        }
+        
+        const entero = Math.floor(totalNum);
+        const decimales = Math.round((totalNum - entero) * 100).toString().padStart(2, '0');
+        const textoMonto = `SON: ${numeroALetras(entero)} Y ${decimales}/100 SOLES`;
+
+        // Generamos el HTML imitando el PDF clásico de los ERP peruanos
         res.send(`
         <!DOCTYPE html>
         <html lang="es">
         <head>
             <meta charset="UTF-8">
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>Boleta Electrónica ${serieBoleta} | StarView</title>
+            <title>Boleta Electrónica ${serieBoleta}</title>
             <style>
-                body { 
-                    margin: 0; padding: 40px 20px; 
-                    background-color: #f3f4f6; 
-                    font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; 
-                    color: #333333; 
-                    display: flex; justify-content: center; 
+                body {
+                    font-family: Arial, Helvetica, sans-serif;
+                    font-size: 11px;
+                    color: #000;
+                    margin: 0;
+                    padding: 20px;
+                    display: flex;
+                    justify-content: center;
+                    background-color: #525659; /* Fondo oscuro típico de visores PDF */
                 }
-                .invoice-box { 
-                    max-width: 600px; width: 100%; 
-                    background-color: #ffffff; padding: 40px; 
-                    border-top: 6px solid #e50914; 
-                    box-shadow: 0 4px 10px rgba(0,0,0,0.05); 
-                    border-radius: 8px; box-sizing: border-box; 
+                .pdf-container {
+                    background-color: #fff;
+                    width: 210mm; /* Ancho A4 */
+                    min-height: 297mm; /* Alto A4 */
+                    padding: 40px;
+                    box-sizing: border-box;
+                    box-shadow: 0 5px 15px rgba(0,0,0,0.5);
                 }
-                .header { text-align: center; margin-bottom: 25px; }
-                .header h1 { color: #e50914; font-size: 28px; margin: 0; letter-spacing: 1px; }
-                .header p { margin: 5px 0; font-size: 13px; color: #666; }
-                .sunat-box { 
-                    border: 2px solid #333; padding: 15px; 
-                    text-align: center; margin-bottom: 30px; 
-                    border-radius: 8px; background-color: #ffffff; 
+                .main-border {
+                    border: 1px solid #000;
+                    padding: 2px;
                 }
-                .sunat-box p { margin: 0; font-weight: bold; font-size: 16px; }
-                .sunat-box h2 { margin: 10px 0; font-size: 18px; color: #333; }
-                .info-table { width: 100%; margin-bottom: 25px; font-size: 14px; line-height: 1.6; }
-                .info-table td { padding: 4px 0; vertical-align: top; }
-                .info-label { font-weight: bold; width: 140px; color: #555; }
-                .items-table { width: 100%; border-collapse: collapse; margin-bottom: 30px; font-size: 14px; }
-                .items-table th { background-color: #f9fafb; padding: 10px; text-align: left; border-bottom: 2px solid #e5e7eb; color: #333; }
-                .items-table td { padding: 15px 10px; border-bottom: 1px solid #e5e7eb; }
-                .totals-container { display: flex; justify-content: flex-end; margin-bottom: 20px; }
-                .totals-table { width: 260px; font-size: 14px; }
-                .totals-table td { padding: 6px 0; }
-                .totals-table .total-row { font-weight: bold; font-size: 16px; border-top: 2px solid #333; color: #333; }
-                .footer { 
-                    margin-top: 40px; text-align: center; 
-                    font-size: 11px; color: #6b7280; 
-                    border-top: 1px dashed #ccc; padding-top: 20px; 
+                .header-container {
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: flex-start;
+                    margin-bottom: 15px;
                 }
-                .footer p { margin: 4px 0; }
-                .no-print-zone { text-align: right; margin-bottom: 15px; }
-                .btn-print { 
-                    background: #374151; color: white; border: none; 
-                    padding: 8px 14px; border-radius: 4px; cursor: pointer; 
-                    font-size: 12px; font-weight: bold; 
+                .company-info {
+                    width: 60%;
                 }
-                .btn-print:hover { background: #1f2937; }
+                .company-name {
+                    font-weight: bold;
+                    font-size: 14px;
+                    margin-bottom: 5px;
+                }
+                .ruc-box {
+                    border: 2px solid #000;
+                    width: 35%;
+                    text-align: center;
+                    padding: 10px;
+                    font-weight: bold;
+                    font-size: 14px;
+                }
+                .ruc-box div { margin: 5px 0; }
                 
-                /* Configuración para que al imprimir/descargar en PDF se vea perfecto */
-                @media print { 
-                    body { background: white; padding: 0; } 
-                    .invoice-box { box-shadow: none; padding: 0; border-top: 6px solid #e50914; border-radius: 0; } 
-                    .no-print-zone { display: none; } 
+                .customer-info {
+                    display: grid;
+                    grid-template-columns: 130px 10px auto;
+                    row-gap: 4px;
+                    margin-bottom: 15px;
+                    border-bottom: 1px solid #000;
+                    padding-bottom: 10px;
+                }
+                .customer-info div:nth-child(3n+2) { text-align: center; }
+                
+                .items-table {
+                    width: 100%;
+                    border-collapse: collapse;
+                    margin-bottom: 5px;
+                }
+                .items-table th {
+                    border-top: 2px solid #000;
+                    border-bottom: 1px solid #000;
+                    padding: 5px;
+                    text-align: left;
+                }
+                .items-table td {
+                    padding: 8px 5px;
+                    vertical-align: top;
+                }
+                .items-table th.right, .items-table td.right { text-align: right; }
+                .items-table th.center, .items-table td.center { text-align: center; }
+                
+                .sub-totals {
+                    width: 100%;
+                    display: flex;
+                    justify-content: flex-end;
+                    border-bottom: 1px solid #000;
+                    padding-bottom: 5px;
+                    margin-bottom: 5px;
+                }
+                .sub-totals-grid {
+                    display: grid;
+                    grid-template-columns: 150px 10px 80px;
+                    row-gap: 3px;
+                    text-align: right;
+                }
+                .sub-totals-grid div:nth-child(3n+1) { text-align: right; }
+                
+                .footer-container {
+                    display: flex;
+                    justify-content: space-between;
+                    margin-bottom: 10px;
+                }
+                .footer-notes {
+                    width: 50%;
+                }
+                .tax-grid {
+                    width: 45%;
+                    display: grid;
+                    grid-template-columns: auto 10px 80px;
+                    row-gap: 3px;
+                }
+                .tax-grid div:nth-child(3n+1) { text-align: right; }
+                .tax-grid div:nth-child(3n+3) { text-align: right; }
+                .tax-grid .total-row { font-weight: bold; font-size: 13px; }
+                .tax-box { border: 1px solid #000; padding: 1px 4px; }
+                
+                .legal-footer {
+                    border: 1px solid #000;
+                    text-align: center;
+                    padding: 10px;
+                    font-style: italic;
+                    font-size: 10px;
+                    margin-top: 10px;
+                }
+                .legal-footer a { color: #000; text-decoration: underline; }
+                
+                .no-print { text-align: right; margin-bottom: 10px; }
+                .btn-print { background: #000; color: #fff; padding: 8px 15px; border: none; cursor: pointer; font-weight: bold; }
+                
+                @media print {
+                    body { background-color: #fff; padding: 0; }
+                    .pdf-container { box-shadow: none; width: 100%; padding: 0; }
+                    .no-print { display: none; }
                 }
             </style>
         </head>
         <body>
-            <div class="invoice-box">
-                <div class="no-print-zone">
-                    <button class="btn-print" onclick="window.print()">🖨️ Imprimir / Guardar PDF</button>
+            <div class="pdf-container">
+                <div class="no-print">
+                    <button class="btn-print" onclick="window.print()">Imprimir Comprobante</button>
                 </div>
+                
+                <div class="main-border">
+                    <div class="header-container">
+                        <div class="company-info">
+                            <div class="company-name">STARVIEW S.A.C.</div>
+                            <div>AV. AMÉRICA SUR 3145 URB. EL BOSQUE</div>
+                            <div>TRUJILLO - TRUJILLO - LA LIBERTAD</div>
+                        </div>
+                        <div class="ruc-box">
+                            <div>BOLETA DE VENTA ELECTRONICA</div>
+                            <div>RUC: 20123456789</div>
+                            <div>${serieBoleta}</div>
+                        </div>
+                    </div>
 
-                <div class="header">
-                    <h1>STARVIEW S.A.C.</h1>
-                    <p>Av. América Sur 3145, Trujillo, La Libertad, Perú</p>
-                </div>
+                    <div class="customer-info">
+                        <div>Fecha de Emisión</div><div>:</div><div>${pago.fecha}</div>
+                        <div>Señor(es)</div><div>:</div><div>${pago.nombre.toUpperCase()}</div>
+                        <div>DNI / DOC</div><div>:</div><div>00000000</div>
+                        <div>Tipo de Moneda</div><div>:</div><div>SOLES</div>
+                        <div>Observación</div><div>:</div><div>PAGO: ${(pago.metodo_pago || 'MERCADOPAGO').toUpperCase()}</div>
+                    </div>
 
-                <div class="sunat-box">
-                    <p>R.U.C. N° 20123456789</p>
-                    <h2>BOLETA DE VENTA ELECTRÓNICA</h2>
-                    <p>${serieBoleta}</p>
-                </div>
-
-                <table class="info-table">
-                    <tr><td class="info-label">Señor(es):</td><td>${pago.nombre.toUpperCase()}</td></tr>
-                    <tr><td class="info-label">Fecha de Emisión:</td><td>${pago.fecha}</td></tr>
-                    <tr><td class="info-label">Moneda:</td><td>SOLES (PEN)</td></tr>
-                    <tr><td class="info-label">Medio de Pago:</td><td>${(pago.metodo_pago || 'MERCADO PAGO').toUpperCase()}</td></tr>
-                </table>
-
-                <table class="items-table">
-                    <thead>
-                        <tr>
-                            <th style="width: 10%;">Cant.</th>
-                            <th style="width: 55%;">Descripción</th>
-                            <th style="width: 15%; text-align: right;">V. Unitario</th>
-                            <th style="width: 20%; text-align: right;">Importe</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr>
-                            <td>1</td>
-                            <td>Servicio de suscripción mensual a plataforma de streaming – Plan ${planNombre}</td>
-                            <td style="text-align: right;">S/ ${subtotalStr}</td>
-                            <td style="text-align: right;">S/ ${subtotalStr}</td>
-                        </tr>
-                    </tbody>
-                </table>
-
-                <div class="totals-container">
-                    <table class="totals-table">
-                        <tr><td style="color: #555;">Op. Gravadas:</td><td style="text-align: right;">S/ ${subtotalStr}</td></tr>
-                        <tr><td style="color: #555;">I.G.V. (18%):</td><td style="text-align: right;">S/ ${igvStr}</td></tr>
-                        <tr class="total-row"><td style="padding-top: 12px;">Importe Total:</td><td style="padding-top: 12px; text-align: right;">S/ ${totalStr}</td></tr>
+                    <table class="items-table">
+                        <thead>
+                            <tr>
+                                <th class="center" style="width: 10%;">Cantidad</th>
+                                <th class="center" style="width: 15%;">Unidad Medida</th>
+                                <th style="width: 35%;">Descripción</th>
+                                <th class="right" style="width: 15%;">Valor Unitario(*)</th>
+                                <th class="right" style="width: 10%;">Descuento(*)</th>
+                                <th class="right" style="width: 15%;">Importe de Venta(**)</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td class="center">1.00</td>
+                                <td class="center">UNIDAD</td>
+                                <td>SUSCRIPCION STARVIEW - PLAN ${planNombre.toUpperCase()}</td>
+                                <td class="right">${subtotalStr}</td>
+                                <td class="right">0.00</td>
+                                <td class="right">${subtotalStr}</td>
+                            </tr>
+                        </tbody>
                     </table>
-                </div>
 
-                <div class="footer">
-                    <p>Representación impresa de la Boleta de Venta Electrónica.</p>
-                    <p>Podrá ser consultada en www.sunat.gob.pe</p>
-                    <p>Autorizado mediante Resolución de Intendencia N° 034-005-0005315</p>
+                    <div class="sub-totals">
+                        <div class="sub-totals-grid">
+                            <div>Otros Cargos</div><div>:</div><div>S/ 0.00</div>
+                            <div>Otros Tributos</div><div>:</div><div>S/ 0.00</div>
+                            <div>ICBPER</div><div>:</div><div class="tax-box">S/ 0.00</div>
+                            <div>Importe Total</div><div>:</div><div>S/ ${subtotalStr}</div>
+                        </div>
+                    </div>
+
+                    <div style="font-weight: bold; margin-bottom: 15px; text-align: right;">
+                        ${textoMonto}
+                    </div>
+
+                    <div class="footer-container">
+                        <div class="footer-notes">
+                            <div>(*) Sin impuestos.</div>
+                            <div>(**) Incluye impuestos, de ser Op. Gravada.</div>
+                        </div>
+                        
+                        <div class="tax-grid">
+                            <div>Op. Gravada</div><div>:</div><div class="tax-box">S/ ${subtotalStr}</div>
+                            <div>Op. Exonerada</div><div>:</div><div class="tax-box">S/ 0.00</div>
+                            <div>Op. Inafecta</div><div>:</div><div class="tax-box">S/ 0.00</div>
+                            <div>ISC</div><div>:</div><div class="tax-box">S/ 0.00</div>
+                            <div>IGV</div><div>:</div><div class="tax-box">S/ ${igvStr}</div>
+                            <div>ICBPER</div><div>:</div><div class="tax-box">S/ 0.00</div>
+                            <div>Otros Cargos</div><div>:</div><div class="tax-box">S/ 0.00</div>
+                            <div>Otros Tributos</div><div>:</div><div class="tax-box">S/ 0.00</div>
+                            <div>Monto de Redondeo</div><div>:</div><div class="tax-box">S/ 0.00</div>
+                            <div class="total-row">Importe Total</div><div class="total-row">:</div><div class="tax-box total-row">S/ ${totalStr}</div>
+                        </div>
+                    </div>
+
+                    <div class="legal-footer">
+                        Esta es una representación impresa de la Boleta de Venta Electrónica, generada en el Sistema de la SUNAT. El Emisor Electrónico puede verificarla utilizando su clave SOL, el Adquirente o Usuario puede consultar su validez en SUNAT Virtual: <a href="http://www.sunat.gob.pe" target="_blank">www.sunat.gob.pe</a>, en Opciones sin Clave SOL/ Consulta de Validez del CPE.
+                    </div>
                 </div>
             </div>
         </body>
