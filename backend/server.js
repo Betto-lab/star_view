@@ -2270,7 +2270,7 @@ app.get("/panel-admin/:usuario_id", (req, res) => {
     conexion.query("SELECT correo FROM usuarios WHERE id = ?", [usuario_id], (errAdmin, usuarios) => {
         if (errAdmin || usuarios.length === 0) return res.send("<h1>Usuario no encontrado</h1>");
 
-        const CORREO_ADMINISTRADOR = "admin@starview.com"; // 🚨 RECUERDA PONER TU CORREO AQUÍ
+        const CORREO_ADMINISTRADOR = "soporte.starview@gmail.com"; // 🚨 RECUERDA PONER TU CORREO AQUÍ
 
         if (usuarios[0].correo !== CORREO_ADMINISTRADOR) {
             // Si un curioso intenta entrar a esta ruta, el servidor lo patea al inicio en silencio
