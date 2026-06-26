@@ -8,20 +8,7 @@ const dns = require("dns");
 require("dotenv").config();
 
 const conexion = require("./db");
-const rateLimit = require("express-rate-limit");
 
-// Configuración de Vercel para que lea bien las IPs
-app.set('trust proxy', 1);
-
-// Limitador: Máximo 10 intentos de login cada 5 minutos por IP
-const loginLimiter = rateLimit({
-    windowMs: 5 * 60 * 1000, 
-    max: 10,
-    message: { ok: false, mensaje: "Demasiados intentos de inicio de sesión. Por favor, intenta de nuevo en 5 minutos." }
-});
-
-// Aplícalo SOLO a la ruta de login
-app.use("/login", loginLimiter);
 const { MercadoPagoConfig, Preference } = require("mercadopago");
 
 const clienteMP = process.env.MP_ACCESS_TOKEN
@@ -2282,7 +2269,7 @@ app.get("/panel-admin/:usuario_id", (req, res) => {
     conexion.query("SELECT correo FROM usuarios WHERE id = ?", [usuario_id], (errAdmin, usuarios) => {
         if (errAdmin || usuarios.length === 0) return res.send("<h1>Usuario no encontrado</h1>");
 
-        const CORREO_ADMINISTRADOR = "admin@starview.com"; // 🚨 Asegúrate de que sea tu correo
+        const CORREO_ADMINISTRADOR = "soporte.starview@gmail.com"; // 🚨 Asegúrate de que sea tu correo
 
         if (usuarios[0].correo !== CORREO_ADMINISTRADOR) {
             return res.redirect("/home.html"); 
@@ -2418,9 +2405,12 @@ app.delete("/api/admin/contenido/:id", (req, res) => {
     });
 });
 /* =========================================
-   MANEJADOR DE ERRORES 404 (PÁGINA NO ENCONTRADA)
+   MANEJADOR DE ERRORES 404 (SEGURO PARA VERCEL)
 ========================================= */
 app.use((req, res) => {
-    res.status(404).sendFile(path.join(__dirname, "../frontend/404.html"));
+    // En lugar de sendFile (que rompe Vercel), hacemos un redirect seguro
+    res.status(404).redirect("/404.html");
 });
+
+
 module.exports = app;
