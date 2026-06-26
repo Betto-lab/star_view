@@ -48,12 +48,17 @@ function obtenerPerfilId() {
 }
 
 async function verificarAccesoCatalogo() {
-    const usuarioId = (localStorage.getItem("usuario_id") || sessionStorage.getItem("usuario_id"));
+    const usuarioId = localStorage.getItem("usuario_id") || sessionStorage.getItem("usuario_id");
+    const rol = localStorage.getItem("rol") || sessionStorage.getItem("rol");
 
-    if (!usuarioId || usuarioId === "undefined" || usuarioId === "null") {
-        localStorage.removeItem("usuario_id");
-        localStorage.setItem("volver_despues_login", "planes.html");
-        window.location.href = "login.html";
+    if (!usuarioId) {
+        window.location.replace("login.html");
+        return false;
+    }
+
+    // 1. BLINDAJE ADMIN: Si el admin intenta entrar al catálogo, lo devolvemos a su panel
+    if (rol === "admin") {
+        window.location.replace(`${API_BASE}/panel-admin/${usuarioId}`);
         return false;
     }
 
@@ -61,44 +66,40 @@ async function verificarAccesoCatalogo() {
         const respuesta = await fetch(`${API_BASE}/suscripcion/${usuarioId}`);
         const suscripcion = await respuesta.json();
 
-        // 1. Si no hay suscripción, lo botamos
-        if (!suscripcion || !suscripcion.estado) {
-            window.location.href = "planes.html";
+        // 2. BLINDAJE NUEVOS USUARIOS: Si la BD responde vacío (nunca ha pagado)
+        if (!suscripcion || Object.keys(suscripcion).length === 0 || !suscripcion.estado) {
+            window.location.replace("planes.html");
             return false;
         }
 
+        // 3. BLINDAJE DE FECHAS Y ESTADO
         let accesoPermitido = false;
 
-        // 2. Si está activa, pasa de frente
         if (suscripcion.estado === "activa") {
             accesoPermitido = true;
-        } 
-        // 3. Si está cancelada, verificamos si su fecha aún no ha vencido
-        else if (suscripcion.estado === "cancelada" && suscripcion.fecha_fin) {
+        } else if (suscripcion.estado === "cancelada" && suscripcion.fecha_fin) {
             const hoy = new Date();
             const fechaFin = new Date(suscripcion.fecha_fin);
             
-            // Igulamos las horas a cero para comparar solo los días exactos
             hoy.setHours(0, 0, 0, 0);
             fechaFin.setHours(0, 0, 0, 0);
 
             if (hoy <= fechaFin) {
-                accesoPermitido = true; // Todavía tiene tiempo, ¡déjalo pasar!
+                accesoPermitido = true;
             }
         }
 
-        // Si después de revisar, no tiene permiso, recién lo botamos a pagar
         if (!accesoPermitido) {
-            window.location.href = "planes.html";
+            window.location.replace("planes.html");
             return false;
         }
 
         return true;
 
     } catch (error) {
-        console.log("Error al verificar suscripción:", error);
-        window.location.href = "planes.html";
-        return false;
+        console.log("Error de red. Tolerancia activada para no expulsar al usuario:", error);
+        // Retornamos true si el servidor parpadea para no arruinar la experiencia del usuario legítimo
+        return true; 
     }
 }
 

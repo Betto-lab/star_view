@@ -8,7 +8,20 @@ const dns = require("dns");
 require("dotenv").config();
 
 const conexion = require("./db");
+const rateLimit = require("express-rate-limit");
 
+// Configuración de Vercel para que lea bien las IPs
+app.set('trust proxy', 1);
+
+// Limitador: Máximo 10 intentos de login cada 5 minutos por IP
+const loginLimiter = rateLimit({
+    windowMs: 5 * 60 * 1000, 
+    max: 10,
+    message: { ok: false, mensaje: "Demasiados intentos de inicio de sesión. Por favor, intenta de nuevo en 5 minutos." }
+});
+
+// Aplícalo SOLO a la ruta de login
+app.use("/login", loginLimiter);
 const { MercadoPagoConfig, Preference } = require("mercadopago");
 
 const clienteMP = process.env.MP_ACCESS_TOKEN
@@ -2261,126 +2274,153 @@ app.post("/api/suscripciones/cancelar", (req, res) => {
     );
 });
 /* =========================================
-   PANEL DE ADMINISTRACIÓN (RENDERIZADO SEGURO DESDE EL SERVIDOR)
+   PANEL DE ADMINISTRACIÓN (CRM + CMS RENDERIZADO)
 ========================================= */
 app.get("/panel-admin/:usuario_id", (req, res) => {
     const { usuario_id } = req.params;
 
-    // 1. CAPA DE SEGURIDAD ABSOLUTA
     conexion.query("SELECT correo FROM usuarios WHERE id = ?", [usuario_id], (errAdmin, usuarios) => {
         if (errAdmin || usuarios.length === 0) return res.send("<h1>Usuario no encontrado</h1>");
 
-        const CORREO_ADMINISTRADOR = "soporte.starview@gmail.com"; // 🚨 RECUERDA PONER TU CORREO AQUÍ
+        const CORREO_ADMINISTRADOR = "admin@starview.com"; // 🚨 Asegúrate de que sea tu correo
 
         if (usuarios[0].correo !== CORREO_ADMINISTRADOR) {
-            // Si un curioso intenta entrar a esta ruta, el servidor lo patea al inicio en silencio
             return res.redirect("/home.html"); 
         }
 
-        // 2. SI ES EL JEFE, CALCULAMOS TODO EN UNA SOLA CONSULTA OPTIMIZADA
-        const queryStats = `
-            SELECT 
-                (SELECT COUNT(*) FROM usuarios WHERE correo != ?) AS total_usuarios,
-                (SELECT SUM(monto) FROM pagos WHERE estado = 'pagado') AS ingresos,
-                (SELECT COUNT(*) FROM suscripciones WHERE estado = 'activa') AS activas
-        `;
+        const queryStats = `SELECT 
+            (SELECT COUNT(*) FROM usuarios WHERE correo != ?) AS total_usuarios,
+            (SELECT SUM(monto) FROM pagos WHERE estado = 'pagado') AS ingresos,
+            (SELECT COUNT(*) FROM suscripciones WHERE estado = 'activa') AS activas`;
 
-        const queryCRM = `
-            SELECT u.id, u.nombre, u.correo, DATE_FORMAT(u.fecha_registro, '%d/%m/%Y') as fecha_registro,
-                   COALESCE((SELECT s.estado FROM suscripciones s WHERE s.usuario_id = u.id ORDER BY s.id DESC LIMIT 1), 'Sin suscripción') AS estado_suscripcion
-            FROM usuarios u 
-            WHERE u.correo != ? 
-            ORDER BY u.id DESC
-        `;
+        const queryCRM = `SELECT u.id, u.nombre, u.correo, DATE_FORMAT(u.fecha_registro, '%d/%m/%Y') as fecha_registro,
+               COALESCE((SELECT s.estado FROM suscripciones s WHERE s.usuario_id = u.id ORDER BY s.id DESC LIMIT 1), 'Sin suscripción') AS estado_suscripcion
+        FROM usuarios u WHERE u.correo != ? ORDER BY u.id DESC`;
+
+        // NUEVA CONSULTA: Traemos el catálogo de películas
+        const queryCMS = `SELECT id, titulo, genero, origen FROM contenido ORDER BY id DESC LIMIT 100`;
 
         conexion.query(queryStats, [CORREO_ADMINISTRADOR], (errStats, resStats) => {
             conexion.query(queryCRM, [CORREO_ADMINISTRADOR], (errCRM, resCRM) => {
-                
-                const stats = resStats[0] || {};
-                const clientes = resCRM || [];
+                conexion.query(queryCMS, (errCMS, resCMS) => {
+                    
+                    const stats = resStats[0] || {};
+                    const clientes = resCRM || [];
+                    const catalogo = resCMS || [];
 
-                // 3. ARMAMOS LA TABLA DE CLIENTES
-                const filasHTML = clientes.map(u => {
-                    let claseBadge = "sin-suscripcion";
-                    if (u.estado_suscripcion === "activa") claseBadge = "activa";
-                    if (u.estado_suscripcion === "cancelada") claseBadge = "cancelada";
+                    // Filas de Clientes
+                    const filasCRM = clientes.map(u => {
+                        let claseBadge = "sin-suscripcion";
+                        if (u.estado_suscripcion === "activa") claseBadge = "activa";
+                        if (u.estado_suscripcion === "cancelada") claseBadge = "cancelada";
+                        return `<tr><td>#${u.id}</td><td style="font-weight: bold;">${u.nombre}</td><td style="color: #94a3b8;">${u.correo}</td><td>${u.fecha_registro}</td><td><span class="badge ${claseBadge}">${u.estado_suscripcion}</span></td></tr>`;
+                    }).join("");
 
-                    return `
-                        <tr>
-                            <td>#${u.id}</td>
-                            <td style="font-weight: bold;">${u.nombre}</td>
-                            <td style="color: #94a3b8;">${u.correo}</td>
-                            <td>${u.fecha_registro}</td>
-                            <td><span class="badge ${claseBadge}">${u.estado_suscripcion}</span></td>
-                        </tr>
+                    // Filas de Películas (CMS)
+                    const filasCMS = catalogo.map(c => {
+                        return `<tr><td>#${c.id}</td><td style="font-weight: bold;">${c.titulo}</td><td style="color: #94a3b8;">${c.genero}</td><td><span class="badge" style="background: rgba(255,255,255,0.1); border: 1px solid #555;">${c.origen.toUpperCase()}</span></td>
+                        <td><button onclick="eliminarPelicula(${c.id})" style="background: #e50914; color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer;">🗑️ Eliminar</button></td></tr>`;
+                    }).join("");
+
+                    const html = `
+                    <!DOCTYPE html>
+                    <html lang="es">
+                    <head>
+                        <meta charset="UTF-8">
+                        <title>Admin - StarView</title>
+                        <style>
+                            body { margin: 0; padding: 0; font-family: 'Arial', sans-serif; background-color: #0b0f19; color: #ffffff; }
+                            .admin-header { background-color: #151a23; padding: 20px 40px; border-bottom: 1px solid #1f2937; display: flex; justify-content: space-between; align-items: center; }
+                            .admin-header h1 { color: #e50914; margin: 0; font-size: 24px; letter-spacing: 2px; }
+                            .container { padding: 40px; max-width: 1200px; margin: 0 auto; }
+                            .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; margin-bottom: 40px; }
+                            .stat-card { background: linear-gradient(145deg, #1f2937, #151a23); border: 1px solid rgba(255,255,255,0.05); padding: 30px; border-radius: 12px; }
+                            .stat-card h3 { margin: 0 0 10px 0; color: #94a3b8; font-size: 16px; text-transform: uppercase; }
+                            .stat-card .value { font-size: 40px; font-weight: bold; margin: 0; color: #ffffff; }
+                            .stat-card.ingresos .value { color: #4ade80; }
+                            .btn-volver { background: transparent; color: #cbd5e1; border: 1px solid #cbd5e1; padding: 8px 16px; border-radius: 6px; cursor: pointer; text-decoration: none; }
+                            .btn-volver:hover { background: rgba(255,255,255,0.1); }
+                            .crm-table-container { background: #151a23; border-radius: 12px; border: 1px solid #1f2937; overflow: hidden; margin-bottom: 40px;}
+                            table { width: 100%; border-collapse: collapse; text-align: left; }
+                            th, td { padding: 15px 20px; border-bottom: 1px solid #1f2937; }
+                            th { background-color: #0b0f19; color: #94a3b8; font-size: 14px; text-transform: uppercase; }
+                            .badge { padding: 5px 10px; border-radius: 999px; font-size: 12px; font-weight: bold; text-transform: uppercase; }
+                            .badge.activa { background: rgba(74, 222, 128, 0.2); color: #4ade80; border: 1px solid #4ade80; }
+                            .badge.cancelada { background: rgba(251, 191, 36, 0.2); color: #fbbf24; border: 1px solid #fbbf24; }
+                            .badge.sin-suscripcion { background: rgba(148, 163, 184, 0.2); color: #94a3b8; border: 1px solid #94a3b8; }
+                        </style>
+                    </head>
+                    <body>
+                        <header class="admin-header">
+                            <h1>STARVIEW <span style="color: #fff; font-size: 18px;">ADMIN</span></h1>
+                            <button onclick="cerrarSesionAdmin()" class="btn-volver">🚪 Cerrar Sesión</button>
+                        </header>
+                        <div class="container">
+                            <h2 style="margin-bottom: 30px;">Resumen del Negocio</h2>
+                            <div class="stats-grid">
+                                <div class="stat-card"><h3>👥 Clientes</h3><p class="value">${stats.total_usuarios}</p></div>
+                                <div class="stat-card"><h3>⭐ Subs. Activas</h3><p class="value">${stats.activas}</p></div>
+                                <div class="stat-card ingresos"><h3>💰 Ingresos Totales</h3><p class="value">S/ ${Number(stats.ingresos || 0).toFixed(2)}</p></div>
+                            </div>
+                            
+                            <h2 style="margin-bottom: 20px;">Gestión de Clientes (CRM)</h2>
+                            <div class="crm-table-container" style="max-height: 400px; overflow-y: auto;">
+                                <table>
+                                    <thead><tr><th>ID</th><th>Cliente</th><th>Correo</th><th>Registro</th><th>Estado</th></tr></thead>
+                                    <tbody>${filasCRM || '<tr><td colspan="5">No hay clientes aún.</td></tr>'}</tbody>
+                                </table>
+                            </div>
+
+                            <h2 style="margin-bottom: 20px;">Gestión de Contenido (CMS)</h2>
+                            <div class="crm-table-container" style="max-height: 500px; overflow-y: auto;">
+                                <table>
+                                    <thead><tr><th>ID</th><th>Título</th><th>Género</th><th>Origen</th><th>Acción</th></tr></thead>
+                                    <tbody>${filasCMS || '<tr><td colspan="5">No hay películas aún.</td></tr>'}</tbody>
+                                </table>
+                            </div>
+                        </div>
+                        <script>
+                            function cerrarSesionAdmin() {
+                                localStorage.clear(); sessionStorage.clear(); window.location.href = "/login.html";
+                            }
+                            async function eliminarPelicula(id) {
+                                if(confirm("¿Estás seguro de eliminar esta película del catálogo?")) {
+                                    const res = await fetch(window.location.origin + "/api/admin/contenido/" + id, { method: "DELETE" });
+                                    const data = await res.json();
+                                    if(data.ok) window.location.reload();
+                                    else alert("Error al eliminar.");
+                                }
+                            }
+                        </script>
+                    </body>
+                    </html>
                     `;
-                }).join("");
-
-                // 4. EL SERVIDOR "FABRICA" Y ENVÍA EL HTML SEGURO
-                const html = `
-                <!DOCTYPE html>
-                <html lang="es">
-                <head>
-                    <meta charset="UTF-8">
-                    <title>Admin - StarView</title>
-                    <style>
-                        body { margin: 0; padding: 0; font-family: 'Arial', sans-serif; background-color: #0b0f19; color: #ffffff; }
-                        .admin-header { background-color: #151a23; padding: 20px 40px; border-bottom: 1px solid #1f2937; display: flex; justify-content: space-between; align-items: center; }
-                        .admin-header h1 { color: #e50914; margin: 0; font-size: 24px; letter-spacing: 2px; }
-                        .container { padding: 40px; max-width: 1200px; margin: 0 auto; }
-                        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; margin-bottom: 40px; }
-                        .stat-card { background: linear-gradient(145deg, #1f2937, #151a23); border: 1px solid rgba(255,255,255,0.05); padding: 30px; border-radius: 12px; }
-                        .stat-card h3 { margin: 0 0 10px 0; color: #94a3b8; font-size: 16px; text-transform: uppercase; }
-                        .stat-card .value { font-size: 40px; font-weight: bold; margin: 0; color: #ffffff; }
-                        .stat-card.ingresos .value { color: #4ade80; }
-                        .btn-volver { background: transparent; color: #cbd5e1; border: 1px solid #cbd5e1; padding: 8px 16px; border-radius: 6px; cursor: pointer; text-decoration: none; }
-                        .btn-volver:hover { background: rgba(255,255,255,0.1); }
-                        .crm-table-container { background: #151a23; border-radius: 12px; border: 1px solid #1f2937; overflow: hidden; }
-                        table { width: 100%; border-collapse: collapse; text-align: left; }
-                        th, td { padding: 15px 20px; border-bottom: 1px solid #1f2937; }
-                        th { background-color: #0b0f19; color: #94a3b8; font-size: 14px; text-transform: uppercase; }
-                        .badge { padding: 5px 10px; border-radius: 999px; font-size: 12px; font-weight: bold; text-transform: uppercase; }
-                        .badge.activa { background: rgba(74, 222, 128, 0.2); color: #4ade80; border: 1px solid #4ade80; }
-                        .badge.cancelada { background: rgba(251, 191, 36, 0.2); color: #fbbf24; border: 1px solid #fbbf24; }
-                        .badge.sin-suscripcion { background: rgba(148, 163, 184, 0.2); color: #94a3b8; border: 1px solid #94a3b8; }
-                    </style>
-                </head>
-                <body>
-                    <header class="admin-header">
-                        <h1>STARVIEW <span style="color: #fff; font-size: 18px;">ADMIN</span></h1>
-                        <button onclick="cerrarSesionAdmin()" class="btn-volver">🚪 Cerrar Sesión</button>
-                    </header>
-                    <div class="container">
-                        <h2 style="margin-bottom: 30px;">Resumen del Negocio</h2>
-                        <div class="stats-grid">
-                            <div class="stat-card"><h3>👥 Clientes</h3><p class="value">${stats.total_usuarios}</p></div>
-                            <div class="stat-card"><h3>⭐ Subs. Activas</h3><p class="value">${stats.activas}</p></div>
-                            <div class="stat-card ingresos"><h3>💰 Ingresos Totales</h3><p class="value">S/ ${Number(stats.ingresos || 0).toFixed(2)}</p></div>
-                        </div>
-                        <h2 style="margin-bottom: 20px;">Gestión de Clientes (CRM)</h2>
-                        <div class="crm-table-container">
-                            <table>
-                                <thead><tr><th>ID</th><th>Cliente</th><th>Correo</th><th>Registro</th><th>Estado</th></tr></thead>
-                                <tbody>
-                                    ${filasHTML || '<tr><td colspan="5" style="text-align: center; color: #94a3b8;">No hay clientes aún.</td></tr>'}
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                    <script>
-                        function cerrarSesionAdmin() {
-                            localStorage.clear();
-                            sessionStorage.clear();
-                            window.location.href = "/login.html";
-                        }
-                    </script>
-                </body>
-                </html>
-                `;
-                
-                res.send(html);
+                    res.send(html);
+                });
             });
         });
     });
+});
+
+/* =========================================
+   ELIMINAR PELÍCULA DESDE EL ADMIN
+========================================= */
+app.delete("/api/admin/contenido/:id", (req, res) => {
+    // Primero borramos el historial asociado para evitar errores de llave foránea
+    conexion.query("DELETE FROM historial WHERE contenido_id = ?", [req.params.id], () => {
+        conexion.query("DELETE FROM mi_lista WHERE contenido_id = ?", [req.params.id], () => {
+            // Luego borramos la película
+            conexion.query("DELETE FROM contenido WHERE id = ?", [req.params.id], (err) => {
+                if(err) return res.json({ ok: false });
+                res.json({ ok: true });
+            });
+        });
+    });
+});
+/* =========================================
+   MANEJADOR DE ERRORES 404 (PÁGINA NO ENCONTRADA)
+========================================= */
+app.use((req, res) => {
+    res.status(404).sendFile(path.join(__dirname, "../frontend/404.html"));
 });
 module.exports = app;

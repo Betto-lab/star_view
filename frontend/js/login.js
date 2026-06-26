@@ -114,12 +114,19 @@ async function iniciarSesion() {
 
         // --- DESVÍO DE ROLES (RBAC) ---
         setTimeout(() => {
-            const CORREO_ADMIN = "soporte.starview@gmail.com"; 
+            const CORREO_ADMIN = "soporte.starview@gmail.com"; // 🚨 Asegúrate de que sea tu correo admin real
 
             if (correo === CORREO_ADMIN) {
-                // AQUÍ ESTÁ LA MAGIA: Apuntamos al backend, no a un archivo
+                // Guardamos el rol para que el navegador sepa que es intocable
+                if (mantenerSesion) localStorage.setItem("rol", "admin");
+                else sessionStorage.setItem("rol", "admin");
+
                 window.location.href = `${API_BASE}/panel-admin/${usuarioId}`;
             } else {
+                // Guardamos el rol como cliente normal
+                if (mantenerSesion) localStorage.setItem("rol", "cliente");
+                else sessionStorage.setItem("rol", "cliente");
+
                 const volver = localStorage.getItem("volver_despues_login");
                 if (volver) {
                     localStorage.removeItem("volver_despues_login");

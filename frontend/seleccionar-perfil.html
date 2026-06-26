@@ -6,6 +6,43 @@
     <title>Seleccionar perfil | StarView</title>
     <link rel="stylesheet" href="css/style.css">
 </head>
+<script>
+    // CANDADO MAESTRO PARA SELECCIÓN DE PERFILES
+    async function protegerSeleccionPerfiles() {
+        const API = window.location.origin;
+        const uid = localStorage.getItem("usuario_id") || sessionStorage.getItem("usuario_id");
+        const rol = localStorage.getItem("rol") || sessionStorage.getItem("rol");
+
+        if (!uid) return window.location.replace("login.html");
+        
+        // Si es el admin, no tiene perfiles, lo botamos a su panel
+        if (rol === "admin") return window.location.replace(`${API}/panel-admin/${uid}`);
+
+        try {
+            const res = await fetch(`${API}/suscripcion/${uid}`);
+            const sub = await res.json();
+            
+            // Si no tiene registro de pago o está vacío
+            if (!sub || Object.keys(sub).length === 0 || !sub.estado) {
+                window.location.replace("planes.html");
+            } 
+            // Si está cancelado, verificamos que no haya expirado
+            else if (sub.estado === "cancelada") {
+                const hoy = new Date();
+                const fin = new Date(sub.fecha_fin);
+                hoy.setHours(0,0,0,0);
+                fin.setHours(0,0,0,0);
+                
+                if (hoy > fin) window.location.replace("planes.html");
+            }
+        } catch(e) {
+            console.log("Comprobando sesión en segundo plano...");
+        }
+    }
+    
+    // Ejecutar inmediatamente
+    protegerSeleccionPerfiles();
+</script>
 <body class="app-body">
 
 <header class="topbar app-topbar">
