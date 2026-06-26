@@ -2195,18 +2195,18 @@ app.post("/api/stream/cerrar", (req, res) => {
 });
 
 /* =========================================
-   REPRESENTACIÓN IMPRESA DE BOLETA (CON DEPURADOR)
+   REPRESENTACIÓN IMPRESA DE BOLETA (SUNAT FINAL)
 ========================================= */
 app.get("/api/pagos/recibo/:id", (req, res) => {
     const pagoId = req.params.id;
 
-    // Intentamos una consulta más conservadora por si acaso
-    // Si p.fecha_pago o p.metodo_pago no existen, el depurador nos lo dirá en pantalla
+    // 1. CORRECCIÓN SQL: Usamos fecha_pago y codigo_comprobante según tu HeidiSQL
     const queryBoleta = `
         SELECT 
-            p.id AS codigo_comprobante,
+            p.codigo_comprobante,
             p.monto,
-            COALESCE(p.fecha, NOW()) AS fecha,
+            p.metodo_pago,
+            DATE_FORMAT(p.fecha_pago, '%d/%m/%Y') AS fecha,
             u.nombre,
             COALESCE((SELECT s.plan FROM suscripciones s WHERE s.usuario_id = u.id ORDER BY s.id DESC LIMIT 1), 'Básico') AS planNombre
         FROM pagos p
@@ -2215,16 +2215,9 @@ app.get("/api/pagos/recibo/:id", (req, res) => {
     `;
 
     conexion.query(queryBoleta, [pagoId], (err, resultados) => {
-        // 🚨 SI HAY UN ERROR DE SQL, LO MOSTRAMOS EN LA PANTALLA
         if (err) {
             console.error("Error SQL en Recibo:", err);
-            return res.status(500).send(`
-                <div style="background:#fee2e2; color:#991b1b; padding:20px; border:1px solid #f87171; font-family:monospace; border-radius:8px; max-width:600px; margin:40px auto;">
-                    <h2 style="margin-top:0;">🚨 Error de Base de Datos (SQL)</h2>
-                    <p><strong>Mensaje del servidor:</strong> ${err.message}</p>
-                    <p>Regresa al chat y dime este mensaje para corregir el nombre de la columna de inmediato.</p>
-                </div>
-            `);
+            return res.status(500).send(`Error de Base de Datos: ${err.message}`);
         }
 
         if (resultados.length === 0) {
@@ -2242,7 +2235,10 @@ app.get("/api/pagos/recibo/:id", (req, res) => {
         const igvStr = igvNum.toFixed(2);
         const totalStr = totalNum.toFixed(2);
 
-        const correlativo = String(pago.codigo_comprobante).padStart(8, '0');
+        // --- SERIE DE BOLETA ELECTRÓNICA ---
+        // Tu BD guarda "BOLETA-SV-20466966". Extraemos solo los números para la SUNAT.
+        const numerosComprobante = String(pago.codigo_comprobante).replace(/[^0-9]/g, '');
+        const correlativo = numerosComprobante.padStart(8, '0').slice(-8); 
         const serieBoleta = `B001-${correlativo}`;
 
         res.send(`
@@ -2250,52 +2246,86 @@ app.get("/api/pagos/recibo/:id", (req, res) => {
         <html lang="es">
         <head>
             <meta charset="UTF-8">
-            <title>Boleta Electrónica ${serieBoleta}</title>
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>Boleta Electrónica ${serieBoleta} | StarView</title>
             <style>
-                body { margin: 0; padding: 40px 20px; background-color: #0b0f19; font-family: Arial, sans-serif; color: #333; display: flex; justify-content: center; }
-                .invoice-box { max-width: 600px; width: 100%; background: #fff; padding: 40px; border-top: 6px solid #e50914; box-shadow: 0 10px 25px rgba(0,0,0,0.3); border-radius: 4px; box-sizing: border-box; }
+                body { margin: 0; padding: 40px 20px; background-color: #0b0f19; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; color: #333333; display: flex; justify-content: center; }
+                .invoice-box { max-width: 600px; width: 100%; background-color: #ffffff; padding: 40px; border-top: 6px solid #e50914; box-shadow: 0 10px 25px rgba(0,0,0,0.3); border-radius: 4px; box-sizing: border-box; }
                 .header { text-align: center; margin-bottom: 25px; }
-                .header h1 { color: #e50914; font-size: 26px; margin: 0; }
+                .header h1 { color: #e50914; font-size: 26px; margin: 0; letter-spacing: 1px; }
                 .header p { margin: 5px 0; font-size: 13px; color: #666; }
-                .sunat-box { border: 2px solid #333; padding: 15px; text-align: center; margin-bottom: 30px; border-radius: 8px; background: #f9fafb; }
+                .sunat-box { border: 2px solid #333; padding: 15px; text-align: center; margin-bottom: 30px; border-radius: 8px; background-color: #f9fafb; }
                 .sunat-box p { margin: 0; font-weight: bold; font-size: 15px; }
-                .sunat-box h2 { margin: 8px 0; font-size: 16px; }
-                .info-table { width: 100%; margin-bottom: 25px; font-size: 14px; }
+                .sunat-box h2 { margin: 8px 0; font-size: 16px; color: #111; letter-spacing: 0.5px; }
+                .info-table { width: 100%; margin-bottom: 25px; font-size: 14px; line-height: 1.6; }
+                .info-table td { padding: 4px 0; vertical-align: top; }
                 .info-label { font-weight: bold; width: 130px; color: #555; }
                 .items-table { width: 100%; border-collapse: collapse; margin-bottom: 30px; font-size: 14px; }
-                .items-table th { background: #f3f4f6; padding: 10px; text-align: left; border-bottom: 2px solid #e5e7eb; }
+                .items-table th { background-color: #f3f4f6; padding: 10px; text-align: left; border-bottom: 2px solid #e5e7eb; color: #4b5563; }
                 .items-table td { padding: 12px 10px; border-bottom: 1px solid #e5e7eb; }
-                .totals-container { display: flex; justify-content: flex-end; }
+                .totals-container { display: flex; justify-content: flex-end; margin-bottom: 20px; }
                 .totals-table { width: 240px; font-size: 14px; }
-                .total-row { font-weight: bold; font-size: 16px; border-top: 2px solid #333; }
+                .totals-table td { padding: 6px 0; }
+                .totals-table .total-row { font-weight: bold; font-size: 16px; border-top: 2px solid #333; color: #111; }
                 .footer { margin-top: 40px; text-align: center; font-size: 11px; color: #6b7280; border-top: 1px dashed #ced4da; padding-top: 20px; }
+                .footer p { margin: 4px 0; }
                 .no-print-zone { text-align: right; margin-bottom: 15px; }
-                .btn-print { background: #374151; color: white; border: none; padding: 8px 14px; border-radius: 4px; cursor: pointer; font-size: 12px; }
+                .btn-print { background: #374151; color: white; border: none; padding: 8px 14px; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: bold; }
+                .btn-print:hover { background: #1f2937; }
                 @media print { body { background: white; padding: 0; } .invoice-box { box-shadow: none; padding: 0; border-top: none; } .no-print-zone { display: none; } }
             </style>
         </head>
         <body>
             <div class="invoice-box">
-                <div class="no-print-zone"><button class="btn-print" onclick="window.print()">🖨️ Imprimir / PDF</button></div>
-                <div class="header"><h1>STARVIEW S.A.C.</h1><p>Av. América Sur 3145, Trujillo, Perú</p></div>
-                <div class="sunat-box"><p>R.U.C. N° 20123456789</p><h2>BOLETA DE VENTA ELECTRÓNICA</h2><p>${serieBoleta}</p></div>
+                <div class="no-print-zone">
+                    <button class="btn-print" onclick="window.print()">🖨️ Imprimir / Guardar PDF</button>
+                </div>
+
+                <div class="header">
+                    <h1>STARVIEW S.A.C.</h1>
+                    <p>Av. América Sur 3145, Trujillo, Perú</p>
+                </div>
+
+                <div class="sunat-box">
+                    <p>R.U.C. N° 20123456789</p>
+                    <h2>BOLETA DE VENTA ELECTRÓNICA</h2>
+                    <p>${serieBoleta}</p>
+                </div>
+
                 <table class="info-table">
                     <tr><td class="info-label">Señor(es):</td><td>${pago.nombre.toUpperCase()}</td></tr>
                     <tr><td class="info-label">Fecha de Emisión:</td><td>${pago.fecha}</td></tr>
                     <tr><td class="info-label">Moneda:</td><td>SOLES (PEN)</td></tr>
-                    <tr><td class="info-label">Medio de Pago:</td><td>MERCADO PAGO</td></tr>
+                    <tr><td class="info-label">Medio de Pago:</td><td>${(pago.metodo_pago || 'MERCADO PAGO').toUpperCase()}</td></tr>
                 </table>
+
                 <table class="items-table">
-                    <thead><tr><th style="width: 10%;">Cant.</th><th style="width: 55%;">Descripción</th><th style="width: 15%; text-align: right;">V. Unitario</th><th style="width: 20%; text-align: right;">Importe</th></tr></thead>
-                    <tbody><tr><td>1</td><td>Suscripción Mensual StarView - Plan ${pago.planNombre}</td><td style="text-align: right;">S/ ${subtotalStr}</td><td style="text-align: right;">S/ ${subtotalStr}</td></tr></tbody>
+                    <thead>
+                        <tr>
+                            <th style="width: 10%;">Cant.</th>
+                            <th style="width: 55%;">Descripción</th>
+                            <th style="width: 15%; text-align: right;">V. Unitario</th>
+                            <th style="width: 20%; text-align: right;">Importe</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>1</td>
+                            <td>Suscripción Mensual StarView - Plan ${pago.planNombre}</td>
+                            <td style="text-align: right;">S/ ${subtotalStr}</td>
+                            <td style="text-align: right;">S/ ${subtotalStr}</td>
+                        </tr>
+                    </tbody>
                 </table>
+
                 <div class="totals-container">
                     <table class="totals-table">
                         <tr><td>Op. Gravadas:</td><td style="text-align: right;">S/ ${subtotalStr}</td></tr>
                         <tr><td>I.G.V. (18%):</td><td style="text-align: right;">S/ ${igvStr}</td></tr>
-                        <tr class="total-row"><td style="padding-top:10px;">Importe Total:</td><td style="padding-top:10px; text-align: right;">S/ ${totalStr}</td></tr>
+                        <tr class="total-row"><td style="padding-top: 10px;">Importe Total:</td><td style="padding-top: 10px; text-align: right;">S/ ${totalStr}</td></tr>
                     </table>
                 </div>
+
                 <div class="footer">
                     <p>Representación impresa de la Boleta de Venta Electrónica.</p>
                     <p>Podrá ser consultada en el portal institucional de la SUNAT.</p>
