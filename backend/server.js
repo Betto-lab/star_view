@@ -2242,7 +2242,7 @@ app.get("/api/pagos/recibo/:id", (req, res) => {
         // --- SERIE DE BOLETA ELECTRÓNICA ---
         const numerosComprobante = String(pago.codigo_comprobante).replace(/[^0-9]/g, '');
         const correlativo = numerosComprobante.padStart(8, '0').slice(-8); 
-        const serieBoleta = `EB01-${correlativo}`; // Usando EB01 como en tu imagen
+        const serieBoleta = `EB01-${correlativo}`;
 
         // --- CONVERSOR DE NÚMEROS A LETRAS (OBLIGATORIO EN SUNAT) ---
         function numeroALetras(num) {
@@ -2276,12 +2276,12 @@ app.get("/api/pagos/recibo/:id", (req, res) => {
                     padding: 20px;
                     display: flex;
                     justify-content: center;
-                    background-color: #525659; /* Fondo oscuro típico de visores PDF */
+                    background-color: #525659;
                 }
                 .pdf-container {
                     background-color: #fff;
-                    width: 210mm; /* Ancho A4 */
-                    min-height: 297mm; /* Alto A4 */
+                    width: 210mm;
+                    min-height: 297mm;
                     padding: 40px;
                     box-sizing: border-box;
                     box-shadow: 0 5px 15px rgba(0,0,0,0.5);
@@ -2443,8 +2443,7 @@ app.get("/api/pagos/recibo/:id", (req, res) => {
                                 <td>SUSCRIPCION STARVIEW - PLAN ${planNombre.toUpperCase()}</td>
                                 <td class="right">${subtotalStr}</td>
                                 <td class="right">0.00</td>
-                                <td class="right">${subtotalStr}</td>
-                            </tr>
+                                <td class="right">${totalStr}</td> </tr>
                         </tbody>
                     </table>
 
@@ -2453,8 +2452,7 @@ app.get("/api/pagos/recibo/:id", (req, res) => {
                             <div>Otros Cargos</div><div>:</div><div>S/ 0.00</div>
                             <div>Otros Tributos</div><div>:</div><div>S/ 0.00</div>
                             <div>ICBPER</div><div>:</div><div class="tax-box">S/ 0.00</div>
-                            <div>Importe Total</div><div>:</div><div>S/ ${subtotalStr}</div>
-                        </div>
+                            <div>Importe Total</div><div>:</div><div>S/ ${totalStr}</div> </div>
                     </div>
 
                     <div style="font-weight: bold; margin-bottom: 15px; text-align: right;">
