@@ -2195,12 +2195,11 @@ app.post("/api/stream/cerrar", (req, res) => {
 });
 
 /* =========================================
-   REPRESENTACIÓN IMPRESA DE BOLETA (SUNAT FINAL)
+   REPRESENTACIÓN IMPRESA DE BOLETA (WEB / SUNAT)
 ========================================= */
 app.get("/api/pagos/recibo/:id", (req, res) => {
     const pagoId = req.params.id;
 
-    // Usamos p.plan_id que vimos en tu HeidiSQL
     const queryBoleta = `
         SELECT 
             p.codigo_comprobante,
@@ -2226,7 +2225,7 @@ app.get("/api/pagos/recibo/:id", (req, res) => {
 
         const pago = resultados[0];
 
-        // Traducimos el plan_id a texto (Ajusta los nombres si tus planes se llaman distinto)
+        // Traducimos el plan_id a texto
         let planNombre = "Básico";
         if (Number(pago.plan_id) === 2) planNombre = "Estándar";
         if (Number(pago.plan_id) === 3) planNombre = "Premium";
@@ -2253,30 +2252,60 @@ app.get("/api/pagos/recibo/:id", (req, res) => {
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
             <title>Boleta Electrónica ${serieBoleta} | StarView</title>
             <style>
-                body { margin: 0; padding: 40px 20px; background-color: #0b0f19; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; color: #333333; display: flex; justify-content: center; }
-                .invoice-box { max-width: 600px; width: 100%; background-color: #ffffff; padding: 40px; border-top: 6px solid #e50914; box-shadow: 0 10px 25px rgba(0,0,0,0.3); border-radius: 4px; box-sizing: border-box; }
+                body { 
+                    margin: 0; padding: 40px 20px; 
+                    background-color: #f3f4f6; 
+                    font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; 
+                    color: #333333; 
+                    display: flex; justify-content: center; 
+                }
+                .invoice-box { 
+                    max-width: 600px; width: 100%; 
+                    background-color: #ffffff; padding: 40px; 
+                    border-top: 6px solid #e50914; 
+                    box-shadow: 0 4px 10px rgba(0,0,0,0.05); 
+                    border-radius: 8px; box-sizing: border-box; 
+                }
                 .header { text-align: center; margin-bottom: 25px; }
-                .header h1 { color: #e50914; font-size: 26px; margin: 0; letter-spacing: 1px; }
+                .header h1 { color: #e50914; font-size: 28px; margin: 0; letter-spacing: 1px; }
                 .header p { margin: 5px 0; font-size: 13px; color: #666; }
-                .sunat-box { border: 2px solid #333; padding: 15px; text-align: center; margin-bottom: 30px; border-radius: 8px; background-color: #f9fafb; }
-                .sunat-box p { margin: 0; font-weight: bold; font-size: 15px; }
-                .sunat-box h2 { margin: 8px 0; font-size: 16px; color: #111; letter-spacing: 0.5px; }
+                .sunat-box { 
+                    border: 2px solid #333; padding: 15px; 
+                    text-align: center; margin-bottom: 30px; 
+                    border-radius: 8px; background-color: #ffffff; 
+                }
+                .sunat-box p { margin: 0; font-weight: bold; font-size: 16px; }
+                .sunat-box h2 { margin: 10px 0; font-size: 18px; color: #333; }
                 .info-table { width: 100%; margin-bottom: 25px; font-size: 14px; line-height: 1.6; }
                 .info-table td { padding: 4px 0; vertical-align: top; }
-                .info-label { font-weight: bold; width: 130px; color: #555; }
+                .info-label { font-weight: bold; width: 140px; color: #555; }
                 .items-table { width: 100%; border-collapse: collapse; margin-bottom: 30px; font-size: 14px; }
-                .items-table th { background-color: #f3f4f6; padding: 10px; text-align: left; border-bottom: 2px solid #e5e7eb; color: #4b5563; }
-                .items-table td { padding: 12px 10px; border-bottom: 1px solid #e5e7eb; }
+                .items-table th { background-color: #f9fafb; padding: 10px; text-align: left; border-bottom: 2px solid #e5e7eb; color: #333; }
+                .items-table td { padding: 15px 10px; border-bottom: 1px solid #e5e7eb; }
                 .totals-container { display: flex; justify-content: flex-end; margin-bottom: 20px; }
-                .totals-table { width: 240px; font-size: 14px; }
+                .totals-table { width: 260px; font-size: 14px; }
                 .totals-table td { padding: 6px 0; }
-                .totals-table .total-row { font-weight: bold; font-size: 16px; border-top: 2px solid #333; color: #111; }
-                .footer { margin-top: 40px; text-align: center; font-size: 11px; color: #6b7280; border-top: 1px dashed #ced4da; padding-top: 20px; }
+                .totals-table .total-row { font-weight: bold; font-size: 16px; border-top: 2px solid #333; color: #333; }
+                .footer { 
+                    margin-top: 40px; text-align: center; 
+                    font-size: 11px; color: #6b7280; 
+                    border-top: 1px dashed #ccc; padding-top: 20px; 
+                }
                 .footer p { margin: 4px 0; }
                 .no-print-zone { text-align: right; margin-bottom: 15px; }
-                .btn-print { background: #374151; color: white; border: none; padding: 8px 14px; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: bold; }
+                .btn-print { 
+                    background: #374151; color: white; border: none; 
+                    padding: 8px 14px; border-radius: 4px; cursor: pointer; 
+                    font-size: 12px; font-weight: bold; 
+                }
                 .btn-print:hover { background: #1f2937; }
-                @media print { body { background: white; padding: 0; } .invoice-box { box-shadow: none; padding: 0; border-top: none; } .no-print-zone { display: none; } }
+                
+                /* Configuración para que al imprimir/descargar en PDF se vea perfecto */
+                @media print { 
+                    body { background: white; padding: 0; } 
+                    .invoice-box { box-shadow: none; padding: 0; border-top: 6px solid #e50914; border-radius: 0; } 
+                    .no-print-zone { display: none; } 
+                }
             </style>
         </head>
         <body>
@@ -2287,7 +2316,7 @@ app.get("/api/pagos/recibo/:id", (req, res) => {
 
                 <div class="header">
                     <h1>STARVIEW S.A.C.</h1>
-                    <p>Av. América Sur 3145, Trujillo, Perú</p>
+                    <p>Av. América Sur 3145, Trujillo, La Libertad, Perú</p>
                 </div>
 
                 <div class="sunat-box">
@@ -2315,7 +2344,7 @@ app.get("/api/pagos/recibo/:id", (req, res) => {
                     <tbody>
                         <tr>
                             <td>1</td>
-                            <td>Suscripción Mensual StarView - Plan ${planNombre}</td>
+                            <td>Servicio de suscripción mensual a plataforma de streaming – Plan ${planNombre}</td>
                             <td style="text-align: right;">S/ ${subtotalStr}</td>
                             <td style="text-align: right;">S/ ${subtotalStr}</td>
                         </tr>
@@ -2324,15 +2353,15 @@ app.get("/api/pagos/recibo/:id", (req, res) => {
 
                 <div class="totals-container">
                     <table class="totals-table">
-                        <tr><td>Op. Gravadas:</td><td style="text-align: right;">S/ ${subtotalStr}</td></tr>
-                        <tr><td>I.G.V. (18%):</td><td style="text-align: right;">S/ ${igvStr}</td></tr>
-                        <tr class="total-row"><td style="padding-top: 10px;">Importe Total:</td><td style="padding-top: 10px; text-align: right;">S/ ${totalStr}</td></tr>
+                        <tr><td style="color: #555;">Op. Gravadas:</td><td style="text-align: right;">S/ ${subtotalStr}</td></tr>
+                        <tr><td style="color: #555;">I.G.V. (18%):</td><td style="text-align: right;">S/ ${igvStr}</td></tr>
+                        <tr class="total-row"><td style="padding-top: 12px;">Importe Total:</td><td style="padding-top: 12px; text-align: right;">S/ ${totalStr}</td></tr>
                     </table>
                 </div>
 
                 <div class="footer">
                     <p>Representación impresa de la Boleta de Venta Electrónica.</p>
-                    <p>Podrá ser consultada en el portal institucional de la SUNAT.</p>
+                    <p>Podrá ser consultada en www.sunat.gob.pe</p>
                     <p>Autorizado mediante Resolución de Intendencia N° 034-005-0005315</p>
                 </div>
             </div>
