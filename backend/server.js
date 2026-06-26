@@ -2269,10 +2269,10 @@ app.get("/panel-admin/:usuario_id", (req, res) => {
     conexion.query("SELECT correo FROM usuarios WHERE id = ?", [usuario_id], (errAdmin, usuarios) => {
         if (errAdmin || usuarios.length === 0) return res.send("<h1>Usuario no encontrado</h1>");
 
-        const CORREO_ADMINISTRADOR = "admin@starview.com"; // 🚨 Asegúrate de que sea tu correo
+        const CORREO_ADMINISTRADOR = "soporte.starview@gmail.com"; // 🚨 Correo actualizado
 
         if (usuarios[0].correo !== CORREO_ADMINISTRADOR) {
-            return res.redirect("/home.html"); 
+            return res.redirect("/seleccionar-perfil.html"); 
         }
 
         const queryStats = `SELECT 

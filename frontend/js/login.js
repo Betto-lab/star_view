@@ -114,10 +114,9 @@ async function iniciarSesion() {
 
         // --- DESVÍO DE ROLES (RBAC) ---
         setTimeout(() => {
-            const CORREO_ADMIN = "soporte.starview@gmail.com"; // 🚨 Asegúrate de que sea tu correo admin real
+            const CORREO_ADMIN = "soporte.starview@gmail.com"; // 🚨 Correo actualizado
 
             if (correo === CORREO_ADMIN) {
-                // Guardamos el rol para que el navegador sepa que es intocable
                 if (mantenerSesion) localStorage.setItem("rol", "admin");
                 else sessionStorage.setItem("rol", "admin");
 
