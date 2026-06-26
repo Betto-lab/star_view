@@ -2261,7 +2261,7 @@ app.post("/api/suscripciones/cancelar", (req, res) => {
     );
 });
 /* =========================================
-   PANEL DE ADMINISTRACIÓN (CRM + CMS RENDERIZADO)
+   PANEL DE ADMINISTRACIÓN (CRM + CMS COMPLETO)
 ========================================= */
 app.get("/panel-admin/:usuario_id", (req, res) => {
     const { usuario_id } = req.params;
@@ -2269,7 +2269,7 @@ app.get("/panel-admin/:usuario_id", (req, res) => {
     conexion.query("SELECT correo FROM usuarios WHERE id = ?", [usuario_id], (errAdmin, usuarios) => {
         if (errAdmin || usuarios.length === 0) return res.send("<h1>Usuario no encontrado</h1>");
 
-        const CORREO_ADMINISTRADOR = "soporte.starview@gmail.com"; // 🚨 Asegúrate de que sea tu correo
+        const CORREO_ADMINISTRADOR = "admin@starview.com"; // 🚨 Asegúrate de que sea tu correo
 
         if (usuarios[0].correo !== CORREO_ADMINISTRADOR) {
             return res.redirect("/home.html"); 
@@ -2284,8 +2284,7 @@ app.get("/panel-admin/:usuario_id", (req, res) => {
                COALESCE((SELECT s.estado FROM suscripciones s WHERE s.usuario_id = u.id ORDER BY s.id DESC LIMIT 1), 'Sin suscripción') AS estado_suscripcion
         FROM usuarios u WHERE u.correo != ? ORDER BY u.id DESC`;
 
-        // NUEVA CONSULTA: Traemos el catálogo de películas
-        const queryCMS = `SELECT id, titulo, genero, origen FROM contenido ORDER BY id DESC LIMIT 100`;
+        const queryCMS = `SELECT id, titulo, genero, descripcion, infantil, origen FROM contenido ORDER BY id DESC LIMIT 100`;
 
         conexion.query(queryStats, [CORREO_ADMINISTRADOR], (errStats, resStats) => {
             conexion.query(queryCRM, [CORREO_ADMINISTRADOR], (errCRM, resCRM) => {
@@ -2295,7 +2294,6 @@ app.get("/panel-admin/:usuario_id", (req, res) => {
                     const clientes = resCRM || [];
                     const catalogo = resCMS || [];
 
-                    // Filas de Clientes
                     const filasCRM = clientes.map(u => {
                         let claseBadge = "sin-suscripcion";
                         if (u.estado_suscripcion === "activa") claseBadge = "activa";
@@ -2303,10 +2301,18 @@ app.get("/panel-admin/:usuario_id", (req, res) => {
                         return `<tr><td>#${u.id}</td><td style="font-weight: bold;">${u.nombre}</td><td style="color: #94a3b8;">${u.correo}</td><td>${u.fecha_registro}</td><td><span class="badge ${claseBadge}">${u.estado_suscripcion}</span></td></tr>`;
                     }).join("");
 
-                    // Filas de Películas (CMS)
                     const filasCMS = catalogo.map(c => {
-                        return `<tr><td>#${c.id}</td><td style="font-weight: bold;">${c.titulo}</td><td style="color: #94a3b8;">${c.genero}</td><td><span class="badge" style="background: rgba(255,255,255,0.1); border: 1px solid #555;">${c.origen.toUpperCase()}</span></td>
-                        <td><button onclick="eliminarPelicula(${c.id})" style="background: #e50914; color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer;">🗑️ Eliminar</button></td></tr>`;
+                        const peliDatos = JSON.stringify(c).replace(/"/g, '&quot;');
+                        return `<tr>
+                            <td>#${c.id}</td>
+                            <td style="font-weight: bold;">${c.titulo}</td>
+                            <td style="color: #94a3b8;">${c.genero}</td>
+                            <td><span class="badge" style="background: rgba(255,255,255,0.1); border: 1px solid #555;">${c.origen.toUpperCase()}</span></td>
+                            <td style="min-width: 180px;">
+                                <button onclick="abrirModalEditar(${peliDatos})" style="background: #3b82f6; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; margin-right: 5px;">✏️ Editar</button>
+                                <button onclick="eliminarPelicula(${c.id})" style="background: #e50914; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer;">🗑️ Eliminar</button>
+                            </td>
+                        </tr>`;
                     }).join("");
 
                     const html = `
@@ -2335,6 +2341,7 @@ app.get("/panel-admin/:usuario_id", (req, res) => {
                             .badge.activa { background: rgba(74, 222, 128, 0.2); color: #4ade80; border: 1px solid #4ade80; }
                             .badge.cancelada { background: rgba(251, 191, 36, 0.2); color: #fbbf24; border: 1px solid #fbbf24; }
                             .badge.sin-suscripcion { background: rgba(148, 163, 184, 0.2); color: #94a3b8; border: 1px solid #94a3b8; }
+                            .input-admin { width: 100%; padding: 10px; margin-bottom: 15px; background: #1f2937; color: white; border: 1px solid #374151; border-radius: 6px; box-sizing: border-box; }
                         </style>
                     </head>
                     <body>
@@ -2358,18 +2365,76 @@ app.get("/panel-admin/:usuario_id", (req, res) => {
                                 </table>
                             </div>
 
-                            <h2 style="margin-bottom: 20px;">Gestión de Contenido (CMS)</h2>
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                                <h2 style="margin: 0;">Gestión de Contenido (CMS)</h2>
+                                <button onclick="abrirModalCrear()" style="background: #10b981; color: white; border: none; padding: 10px 20px; border-radius: 6px; font-weight: bold; cursor: pointer;">➕ Agregar Película</button>
+                            </div>
+                            
                             <div class="crm-table-container" style="max-height: 500px; overflow-y: auto;">
                                 <table>
-                                    <thead><tr><th>ID</th><th>Título</th><th>Género</th><th>Origen</th><th>Acción</th></tr></thead>
+                                    <thead><tr><th>ID</th><th>Título</th><th>Género</th><th>Origen</th><th>Acciones</th></tr></thead>
                                     <tbody>${filasCMS || '<tr><td colspan="5">No hay películas aún.</td></tr>'}</tbody>
                                 </table>
                             </div>
                         </div>
+
+                        <div id="modalEditarPelicula" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 9999; justify-content: center; align-items: center;">
+                            <div style="background: #111827; padding: 30px; border-radius: 12px; width: 90%; max-width: 500px; border: 1px solid rgba(255,255,255,0.1); box-shadow: 0 20px 50px rgba(0,0,0,0.5);">
+                                <h2 style="margin-top: 0; border-bottom: 1px solid #1f2937; padding-bottom: 10px;">Editar Contenido</h2>
+                                <input type="hidden" id="editId">
+                                <label style="color: #94a3b8; font-size: 14px;">Título</label>
+                                <input type="text" id="editTitulo" class="input-admin">
+                                <label style="color: #94a3b8; font-size: 14px;">Géneros (separados por coma)</label>
+                                <input type="text" id="editGenero" class="input-admin">
+                                <label style="color: #94a3b8; font-size: 14px;">Sinopsis</label>
+                                <textarea id="editDescripcion" rows="4" class="input-admin" style="resize: vertical;"></textarea>
+                                <label style="display: flex; align-items: center; gap: 10px; margin-bottom: 25px; cursor: pointer;">
+                                    <input type="checkbox" id="editInfantil" style="width: 18px; height: 18px;"> 
+                                    <span style="font-weight: bold; color: #fbbf24;">Apto para Perfiles Infantiles</span>
+                                </label>
+                                <div style="display: flex; justify-content: flex-end; gap: 15px;">
+                                    <button onclick="cerrarModalEditar()" style="background: transparent; color: #cbd5e1; border: 1px solid #cbd5e1; padding: 10px 20px; border-radius: 6px; cursor: pointer;">Cancelar</button>
+                                    <button onclick="guardarEdicionPelicula()" id="btnGuardarPeli" style="background: #e50914; color: white; border: none; padding: 10px 20px; border-radius: 6px; font-weight: bold; cursor: pointer;">Guardar Cambios</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div id="modalCrearPelicula" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 9999; justify-content: center; align-items: center;">
+                            <div style="background: #111827; padding: 30px; border-radius: 12px; width: 90%; max-width: 500px; border: 1px solid rgba(255,255,255,0.1); box-shadow: 0 20px 50px rgba(0,0,0,0.5); max-height: 90vh; overflow-y: auto;">
+                                <h2 style="margin-top: 0; border-bottom: 1px solid #1f2937; padding-bottom: 10px; color: #10b981;">Agregar Nueva Película</h2>
+                                
+                                <label style="color: #94a3b8; font-size: 14px;">URL del Video (Cloudinary, AWS, etc) *</label>
+                                <input type="text" id="crearVideoUrl" class="input-admin" placeholder="https://res.cloudinary.com/...">
+                                
+                                <label style="color: #94a3b8; font-size: 14px;">Título *</label>
+                                <input type="text" id="crearTitulo" class="input-admin" placeholder="Ej: Spider-Man">
+                                
+                                <label style="color: #94a3b8; font-size: 14px;">Géneros</label>
+                                <input type="text" id="crearGenero" class="input-admin" placeholder="Acción, Ciencia Ficción">
+                                
+                                <label style="color: #94a3b8; font-size: 14px;">URL de la Portada (Opcional)</label>
+                                <input type="text" id="crearImagenUrl" class="input-admin" placeholder="https://...">
+
+                                <label style="color: #94a3b8; font-size: 14px;">Sinopsis</label>
+                                <textarea id="crearDescripcion" rows="3" class="input-admin" style="resize: vertical;"></textarea>
+                                
+                                <label style="display: flex; align-items: center; gap: 10px; margin-bottom: 25px; cursor: pointer;">
+                                    <input type="checkbox" id="crearInfantil" style="width: 18px; height: 18px;"> 
+                                    <span style="font-weight: bold; color: #fbbf24;">Apto para Perfiles Infantiles</span>
+                                </label>
+                                
+                                <div style="display: flex; justify-content: flex-end; gap: 15px;">
+                                    <button onclick="cerrarModalCrear()" style="background: transparent; color: #cbd5e1; border: 1px solid #cbd5e1; padding: 10px 20px; border-radius: 6px; cursor: pointer;">Cancelar</button>
+                                    <button onclick="guardarNuevaPelicula()" id="btnCrearPeli" style="background: #10b981; color: white; border: none; padding: 10px 20px; border-radius: 6px; font-weight: bold; cursor: pointer;">Vincular y Guardar</button>
+                                </div>
+                            </div>
+                        </div>
+
                         <script>
                             function cerrarSesionAdmin() {
                                 localStorage.clear(); sessionStorage.clear(); window.location.href = "/login.html";
                             }
+                            
                             async function eliminarPelicula(id) {
                                 if(confirm("¿Estás seguro de eliminar esta película del catálogo?")) {
                                     const res = await fetch(window.location.origin + "/api/admin/contenido/" + id, { method: "DELETE" });
@@ -2377,6 +2442,82 @@ app.get("/panel-admin/:usuario_id", (req, res) => {
                                     if(data.ok) window.location.reload();
                                     else alert("Error al eliminar.");
                                 }
+                            }
+
+                            // --- LÓGICA DE EDITAR ---
+                            function abrirModalEditar(peli) {
+                                document.getElementById('editId').value = peli.id;
+                                document.getElementById('editTitulo').value = peli.titulo || '';
+                                document.getElementById('editGenero').value = peli.genero || '';
+                                document.getElementById('editDescripcion').value = peli.descripcion || '';
+                                document.getElementById('editInfantil').checked = (Number(peli.infantil) === 1);
+                                document.getElementById('modalEditarPelicula').style.display = 'flex';
+                            }
+                            function cerrarModalEditar() { document.getElementById('modalEditarPelicula').style.display = 'none'; }
+
+                            async function guardarEdicionPelicula() {
+                                const btn = document.getElementById('btnGuardarPeli');
+                                btn.innerText = "Guardando..."; btn.disabled = true;
+                                const id = document.getElementById('editId').value;
+                                const datos = {
+                                    titulo: document.getElementById('editTitulo').value.trim(),
+                                    genero: document.getElementById('editGenero').value.trim(),
+                                    descripcion: document.getElementById('editDescripcion').value.trim(),
+                                    infantil: document.getElementById('editInfantil').checked
+                                };
+                                try {
+                                    const res = await fetch(window.location.origin + "/api/admin/contenido/" + id, {
+                                        method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(datos)
+                                    });
+                                    const resData = await res.json();
+                                    if(resData.ok) window.location.reload();
+                                    else { alert(resData.mensaje); btn.innerText = "Guardar Cambios"; btn.disabled = false; }
+                                } catch(e) { alert("Error de conexión"); btn.innerText = "Guardar Cambios"; btn.disabled = false; }
+                            }
+
+                            // --- LÓGICA DE CREAR NUEVA PELÍCULA ---
+                            function abrirModalCrear() {
+                                // Limpiamos los campos
+                                document.getElementById('crearVideoUrl').value = '';
+                                document.getElementById('crearTitulo').value = '';
+                                document.getElementById('crearGenero').value = '';
+                                document.getElementById('crearImagenUrl').value = '';
+                                document.getElementById('crearDescripcion').value = '';
+                                document.getElementById('crearInfantil').checked = false;
+                                document.getElementById('modalCrearPelicula').style.display = 'flex';
+                            }
+                            function cerrarModalCrear() { document.getElementById('modalCrearPelicula').style.display = 'none'; }
+
+                            async function guardarNuevaPelicula() {
+                                const video_url = document.getElementById('crearVideoUrl').value.trim();
+                                const titulo = document.getElementById('crearTitulo').value.trim();
+                                
+                                if (!video_url || !titulo) {
+                                    alert("El Título y el URL del Video son obligatorios.");
+                                    return;
+                                }
+
+                                const btn = document.getElementById('btnCrearPeli');
+                                btn.innerText = "Guardando..."; btn.disabled = true;
+
+                                const datos = {
+                                    video_url: video_url,
+                                    titulo: titulo,
+                                    genero: document.getElementById('crearGenero').value.trim(),
+                                    imagen: document.getElementById('crearImagenUrl').value.trim(),
+                                    descripcion: document.getElementById('crearDescripcion').value.trim(),
+                                    infantil: document.getElementById('crearInfantil').checked
+                                };
+
+                                try {
+                                    const res = await fetch(window.location.origin + "/api/admin/contenido", {
+                                        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(datos)
+                                    });
+                                    const resData = await res.json();
+                                    
+                                    if(resData.ok) window.location.reload();
+                                    else { alert(resData.mensaje); btn.innerText = "Vincular y Guardar"; btn.disabled = false; }
+                                } catch(e) { alert("Error de conexión"); btn.innerText = "Vincular y Guardar"; btn.disabled = false; }
                             }
                         </script>
                     </body>
@@ -2388,21 +2529,28 @@ app.get("/panel-admin/:usuario_id", (req, res) => {
         });
     });
 });
-
 /* =========================================
-   ELIMINAR PELÍCULA DESDE EL ADMIN
+   AGREGAR NUEVA PELÍCULA MANUALMENTE (CMS)
 ========================================= */
-app.delete("/api/admin/contenido/:id", (req, res) => {
-    // Primero borramos el historial asociado para evitar errores de llave foránea
-    conexion.query("DELETE FROM historial WHERE contenido_id = ?", [req.params.id], () => {
-        conexion.query("DELETE FROM mi_lista WHERE contenido_id = ?", [req.params.id], () => {
-            // Luego borramos la película
-            conexion.query("DELETE FROM contenido WHERE id = ?", [req.params.id], (err) => {
-                if(err) return res.json({ ok: false });
-                res.json({ ok: true });
-            });
-        });
-    });
+app.post("/api/admin/contenido", (req, res) => {
+    const { titulo, genero, descripcion, video_url, imagen, infantil } = req.body;
+
+    if (!titulo || !video_url) {
+        return res.json({ ok: false, mensaje: "El título y el URL del video son obligatorios." });
+    }
+
+    conexion.query(
+        `INSERT INTO contenido (titulo, genero, descripcion, video_url, imagen, infantil, origen) 
+         VALUES (?, ?, ?, ?, ?, ?, 'manual')`,
+        [titulo, genero || "Sin género", descripcion || "", video_url, imagen || "backdrop.jpg", infantil ? 1 : 0],
+        (err) => {
+            if (err) {
+                console.error(err);
+                return res.json({ ok: false, mensaje: "Error al guardar en la base de datos." });
+            }
+            res.json({ ok: true, mensaje: "Película agregada correctamente." });
+        }
+    );
 });
 /* =========================================
    MANEJADOR DE ERRORES 404 (SEGURO PARA VERCEL)
