@@ -2261,30 +2261,44 @@ app.post("/api/suscripciones/cancelar", (req, res) => {
     );
 });
 /* =========================================
-   PANEL DE ADMINISTRACIÓN (DASHBOARD)
+   PANEL DE ADMINISTRACIÓN (DASHBOARD PROTEGIDO)
 ========================================= */
-app.get("/api/admin/stats", (req, res) => {
-    // 1. Contamos el total de usuarios registrados
-    const queryUsuarios = "SELECT COUNT(*) AS total FROM usuarios";
-    // 2. Sumamos todo el dinero de los pagos completados
-    const queryIngresos = "SELECT SUM(monto) AS total_ingresos FROM pagos WHERE estado = 'pagado'";
-    // 3. Contamos cuántas suscripciones están activas ahora mismo
-    const querySuscripciones = "SELECT COUNT(*) AS activas FROM suscripciones WHERE estado = 'activa'";
+app.get("/api/admin/stats/:usuario_id", (req, res) => {
+    const { usuario_id } = req.params;
 
-    conexion.query(queryUsuarios, (err1, resUsuarios) => {
-        if (err1) return res.json({ ok: false });
+    // 1. PRIMERA CAPA DE SEGURIDAD: Verificar quién está pidiendo la información
+    conexion.query("SELECT correo FROM usuarios WHERE id = ?", [usuario_id], (errAdmin, usuarios) => {
+        if (errAdmin || usuarios.length === 0) {
+            return res.status(403).json({ ok: false, mensaje: "Usuario no encontrado." });
+        }
+
+        const correoUsuario = usuarios[0].correo;
         
-        conexion.query(queryIngresos, (err2, resIngresos) => {
-            if (err2) return res.json({ ok: false });
-            
-            conexion.query(querySuscripciones, (err3, resSuscripciones) => {
-                if (err3) return res.json({ ok: false });
+        // 🚨 AQUÍ PONES EL CORREO QUE SERÁ EL ADMINISTRADOR OFICIAL
+        const CORREO_ADMINISTRADOR = "soporte.starview@gmail.com"; 
 
-                res.json({
-                    ok: true,
-                    usuarios: resUsuarios[0].total || 0,
-                    ingresos: Number(resIngresos[0].total_ingresos || 0).toFixed(2),
-                    suscripciones_activas: resSuscripciones[0].activas || 0
+        if (correoUsuario !== CORREO_ADMINISTRADOR) {
+            return res.status(403).json({ ok: false, mensaje: "Acceso denegado. No tienes permisos de administrador." });
+        }
+
+        // 2. SI PASA LA SEGURIDAD, RECIÉN HACEMOS LOS CÁLCULOS
+        const queryUsuarios = "SELECT COUNT(*) AS total FROM usuarios";
+        const queryIngresos = "SELECT SUM(monto) AS total_ingresos FROM pagos WHERE estado = 'pagado'";
+        const querySuscripciones = "SELECT COUNT(*) AS activas FROM suscripciones WHERE estado = 'activa'";
+
+        conexion.query(queryUsuarios, (err1, resUsuarios) => {
+            if (err1) return res.json({ ok: false });
+            conexion.query(queryIngresos, (err2, resIngresos) => {
+                if (err2) return res.json({ ok: false });
+                conexion.query(querySuscripciones, (err3, resSuscripciones) => {
+                    if (err3) return res.json({ ok: false });
+
+                    res.json({
+                        ok: true,
+                        usuarios: resUsuarios[0].total || 0,
+                        ingresos: Number(resIngresos[0].total_ingresos || 0).toFixed(2),
+                        suscripciones_activas: resSuscripciones[0].activas || 0
+                    });
                 });
             });
         });

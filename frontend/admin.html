@@ -73,23 +73,34 @@
 
     <script>
         async function cargarMeticas() {
+            // Sacamos quién es el que está intentando entrar
+            const usuario_id = localStorage.getItem("usuario_id") || sessionStorage.getItem("usuario_id");
+
+            // Si ni siquiera ha iniciado sesión, lo botamos al login
+            if (!usuario_id) {
+                window.location.href = "login.html";
+                return;
+            }
+
             try {
-                const respuesta = await fetch(window.location.origin + "/api/admin/stats");
+                // Le mandamos el ID al servidor para que decida si le abre la puerta
+                const respuesta = await fetch(`${window.location.origin}/api/admin/stats/${usuario_id}`);
                 const datos = await respuesta.json();
 
                 if (datos.ok) {
-                    // Animación simple de conteo para que se vea genial en la sustentación
+                    // Si tiene permiso, pintamos los datos
                     document.getElementById("valUsuarios").innerText = datos.usuarios;
                     document.getElementById("valSuscripciones").innerText = datos.suscripciones_activas;
                     document.getElementById("valIngresos").innerText = `S/ ${datos.ingresos}`;
                 } else {
-                    alert("Error al cargar los datos del servidor.");
+                    // Si el servidor lo rebota (porque no es el admin), lo botamos al inicio
+                    alert("⛔ ALERTA DE SEGURIDAD: " + datos.mensaje);
+                    window.location.replace("home.html");
                 }
             } catch (error) {
                 console.error("Error de conexión:", error);
             }
         }
-
         // Ejecutar al abrir la página
         document.addEventListener("DOMContentLoaded", cargarMeticas);
     </script>
