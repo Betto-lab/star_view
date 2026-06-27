@@ -24,7 +24,6 @@ function escapeHTML(texto) {
         .replaceAll('"', "&quot;")
         .replaceAll("'", "&#039;");
 }
-//comentario de prueba
 async function cargarPlanes() {
     const contenedor = document.getElementById("planesContainer");
 
@@ -50,22 +49,15 @@ async function cargarPlanes() {
             const nombre = plan.nombre || plan.nombre_plan || "Plan";
             const precio = plan.precio || 0;
             const descripcion = plan.descripcion || "Acceso al catálogo StarView.";
-            const calidad = plan.calidad || "HD";
             const pantallas = plan.pantallas || 1;
 
             return `
                 <article class="plan-card">
-                    <p class="eyebrow">${escapeHTML(calidad)}</p>
-
                     <h2>${escapeHTML(nombre)}</h2>
 
                     <h3>S/ ${Number(precio).toFixed(2)}</h3>
 
                     <p>${escapeHTML(descripcion)}</p>
-
-                    <p>
-                        <strong>Calidad:</strong> ${escapeHTML(calidad)}
-                    </p>
 
                     <p>
                         <strong>Pantallas:</strong> ${escapeHTML(pantallas)}
