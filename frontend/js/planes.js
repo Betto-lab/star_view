@@ -24,7 +24,7 @@ function escapeHTML(texto) {
         .replaceAll('"', "&quot;")
         .replaceAll("'", "&#039;");
 }
-
+//comentario de prueba
 async function cargarPlanes() {
     const contenedor = document.getElementById("planesContainer");
 
