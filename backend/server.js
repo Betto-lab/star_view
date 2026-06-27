@@ -2800,7 +2800,7 @@ app.get("/panel-admin/:usuario_id", (req, res) => {
                                 <div class="stat-card ingresos"><h3>💰 Ingresos Totales</h3><p class="value">S/ ${Number(stats.ingresos || 0).toFixed(2)}</p></div>
                             </div>
                             
-                            <h2 style="margin-bottom: 20px;">Gestión de Clientes (CRM)</h2>
+                            <h2 style="margin-bottom: 20px;">Gestión de Clientes </h2>
                             <div class="crm-table-container" style="max-height: 400px; overflow-y: auto;">
                                 <table>
                                     <thead><tr><th>ID</th><th>Cliente</th><th>Correo</th><th>Registro</th><th>Estado</th></tr></thead>

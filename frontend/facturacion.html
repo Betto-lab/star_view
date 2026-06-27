@@ -202,5 +202,13 @@
     </div>
     <div id="searchResults" class="catalogo"></div> 
 </div>
+<script>
+(function blindajeAdmin() {
+    const rol = localStorage.getItem("rol") || sessionStorage.getItem("rol");
+    const uid = localStorage.getItem("usuario_id") || sessionStorage.getItem("usuario_id");
+    if (!uid) { window.location.replace("login.html"); return; }
+    if (rol === "admin") { window.location.replace(window.location.origin + "/panel-admin/" + uid); }
+})();
+</script>
 </body>
 </html>
