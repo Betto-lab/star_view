@@ -189,34 +189,7 @@ function cardContenido(item, opciones = {}) {
     `;
 }
 
-function cardTMDB(item) {
-    return `
-        <article class="card">
-            <img 
-                src="${normalizarImagen(item.imagen)}" 
-                class="poster" 
-                alt="${escapeHTML(item.titulo)}" 
-                style="cursor: pointer;" 
-                onclick="verAhoraTMDB(${item.tmdb_id})"
-            >
 
-            <div class="card-info">
-                <h3>${escapeHTML(item.titulo)}</h3>
-                <p>TMDb · ⭐ ${Number(item.calificacion || 0).toFixed(1)}</p>
-
-                <div class="card-actions">
-                    <button onclick="verAhoraTMDB(${item.tmdb_id})">
-                        Ver ahora
-                    </button>
-
-                    <button onclick="agregarMiListaTMDB(${item.tmdb_id})">
-                        + Mi Lista
-                    </button>
-                </div>
-            </div>
-        </article>
-    `;
-}
 
 function mostrarAvisoPerfilInfantil() {
     let aviso = document.getElementById("avisoPerfilInfantil");
@@ -461,90 +434,7 @@ async function cargarContinuarViendo() {
     }
 }
 
-// 2. REUTILIZAMOS LA SECCIÓN TMDB PARA MOSTRAR PELÍCULAS INFANTILES
-async function cargarTMDB() {
-    const contenedor = document.getElementById("tmdbCatalogo");
-    if (!contenedor) return;
 
-    if (esPerfilInfantilActivo()) {
-        // En lugar de ocultar la fila, le cambiamos el título y mostramos películas de niños
-        const tituloSeccion = contenedor.closest('.section-block')?.querySelector("h2");
-        if (tituloSeccion) tituloSeccion.innerText = "Películas para Niños";
-
-        if (window.catalogoGlobal && window.catalogoGlobal.length > 0) {
-            contenedor.innerHTML = window.catalogoGlobal.slice(0, 12).map(item => cardContenido(item)).join("");
-        } else {
-            contenedor.innerHTML = `<div class="empty-state">No hay películas infantiles disponibles en la base de datos.</div>`;
-        }
-        return; // Detenemos la ejecución aquí para que no llame a la API de TMDb
-    }
-
-    // Si NO es niño, carga TMDb normalmente
-    try {
-        const respuesta = await fetch(`${API_BASE}/tmdb/populares`);
-        const peliculas = await respuesta.json();
-
-        if (!peliculas || peliculas.length === 0) {
-            contenedor.innerHTML = `<div class="empty-state">No se pudo cargar TMDb en este momento.</div>`;
-            return;
-        }
-
-        contenedor.innerHTML = peliculas.slice(0, 12).map(item => cardTMDB(item)).join("");
-    } catch (error) {
-        console.log("Error al cargar TMDb:", error);
-        contenedor.innerHTML = `<div class="empty-state">No se pudo conectar con TMDb.</div>`;
-    }
-}
-
-async function importarTMDB(tmdb_id) {
-    if (esPerfilInfantilActivo()) {
-        mostrarToast("TMDb no está disponible en perfiles infantiles", "error");
-        return null;
-    }
-
-    try {
-        const respuesta = await fetch(`${API_BASE}/tmdb/importar`, {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json"
-            },
-            body: JSON.stringify({ tmdb_id })
-        });
-
-        const contenido = await respuesta.json();
-
-        if (contenido.error) {
-            mostrarToast(
-                contenido.mensaje || "No se pudo importar desde TMDb",
-                "error"
-            );
-            return null;
-        }
-
-        return contenido;
-
-    } catch (error) {
-        console.log("Error al importar desde TMDb:", error);
-        mostrarToast("No se pudo conectar con TMDb", "error");
-        return null;
-    }
-}
-
-async function verAhoraTMDB(tmdb_id) {
-    const contenido = await importarTMDB(tmdb_id);
-
-    if (!contenido) return;
-
-    await verAhora(contenido.id);
-}
-
-async function agregarMiListaTMDB(tmdb_id) {
-    const contenido = await importarTMDB(tmdb_id);
-
-    if (!contenido) return;
-
-    await agregarMiLista(contenido.id);
-}
 
 // ==========================================
 // HU15: RECOMENDACIONES PERSONALIZADAS
@@ -667,7 +557,6 @@ async function eliminarPerfilActual() {
 function activarModoBusqueda(activo) {
     // Capturamos las secciones completas (incluyendo sus títulos h2)
     const secContinuar = document.getElementById("continuarViendo")?.closest('.section-block');
-    const secTmdb = document.getElementById("tmdbCatalogo")?.closest('.section-block');
     const secRecomendados = document.getElementById("rowRecomendados");
     const heroBanner = document.querySelector(".banner-home");
     
@@ -677,7 +566,6 @@ function activarModoBusqueda(activo) {
     if (activo) {
         // MODO BÚSQUEDA: Ocultamos todo el inicio y el banner rojo
         if (secContinuar) secContinuar.style.display = "none";
-        if (secTmdb) secTmdb.style.display = "none";
         if (secRecomendados) secRecomendados.style.display = "none";
         if (heroBanner) heroBanner.style.display = "none";
         
@@ -689,7 +577,6 @@ function activarModoBusqueda(activo) {
     } else {
         // MODO INICIO: Mostramos el banner y las recomendaciones
         if (secContinuar) secContinuar.style.display = "block";
-        if (secTmdb) secTmdb.style.display = "block";
         if (secRecomendados) secRecomendados.style.display = "block";
         if (heroBanner) heroBanner.style.display = "flex";
         
@@ -759,7 +646,6 @@ async function inicializarHome() {
 
     await cargarContinuarViendo();
     await cargarCatalogo();
-    await cargarTMDB();
     await cargarRecomendacionesUsuario();
     await cargarDatosTopbar();
 
@@ -812,6 +698,7 @@ function iniciarHeartbeatGlobal() {
             if (datos.catalogoCambio) {
                 // Hay cambios en el catálogo (ej: eliminaron peli) recargamos silenciosamente
                 await cargarCatalogo();
+                await cargarContinuarViendo();
                 
                 // Si está buscando activamente, actualizamos la búsqueda
                 const inputOverlay = document.getElementById("searchInputOverlay");
