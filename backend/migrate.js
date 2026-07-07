@@ -1,3 +1,4 @@
+require("dotenv").config();
 const conexion = require("./db");
 
 conexion.query("ALTER TABLE usuarios ADD COLUMN sesion_version INT DEFAULT 1", (errQuery) => {

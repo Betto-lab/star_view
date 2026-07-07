@@ -469,7 +469,7 @@ app.post("/api/cuenta/correo/solicitar", (req, res) => {
         cambiosCorreoPeticiones.set(nuevo_correo, { codigo, creado: Date.now() });
 
         try {
-            await enviarCorreoVerificacion(nuevo_correo, nombre, codigo, "cuenta");
+            await enviarCorreoVerificacion(nuevo_correo, nombre, codigo, "cambio_correo");
             res.json({ ok: true, mensaje: "Código enviado" });
         } catch (e) {
             console.error(e);
