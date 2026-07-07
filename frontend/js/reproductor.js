@@ -371,16 +371,18 @@ async function cargarContenido() {
                 const datos = await respuesta.json();
 
                 if (!datos.ok) {
+                    // Si algo falla, pausamos el video inmediatamente por seguridad
+                    const video = document.getElementById("videoPlayer");
+                    if (video) video.pause();
+
                     // Caso de Perfil eliminado en otro dispositivo
                     if (datos.perfilEliminado) {
-                        alert("⚠️ " + datos.mensaje);
                         clearInterval(intervaloHeartbeat);
                         if (intervaloGuardado) clearInterval(intervaloGuardado);
                         window.location.replace("seleccionar-perfil.html");
                     }
                     // Caso de Película borrada desde el panel administrativo
                     else if (datos.contenidoInactivo) {
-                        alert("🎬 " + datos.mensaje);
                         clearInterval(intervaloHeartbeat);
                         if (intervaloGuardado) clearInterval(intervaloGuardado);
                         window.location.replace("home.html");

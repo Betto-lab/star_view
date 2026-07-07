@@ -1613,34 +1613,17 @@ app.post("/pagos", (req, res) => {
                         "SELECT fecha_fin FROM suscripciones WHERE usuario_id = ? AND estado = 'activa' ORDER BY id DESC LIMIT 1",
                         [usuario_id],
                         (errSub, subs) => {
-                            let usarFechaExistente = false;
-                            let fechaFinHeredada = null;
-
-                            if (!errSub && subs.length > 0) {
-                                usarFechaExistente = true;
-                                fechaFinHeredada = subs[0].fecha_fin;
-                            }
-
                             // Cancelamos la suscripción vieja
                             conexion.query(
                                 "UPDATE suscripciones SET estado = 'cancelada' WHERE usuario_id = ? AND estado = 'activa'",
                                 [usuario_id],
                                 () => {
-                                    // Si es un Upgrade (usarFechaExistente = true), se mantiene el vencimiento original
-                                    // Si es una compra limpia o renovación, se le da 1 mes completo
+                                    // Siempre se da 1 mes desde cero (ya se descontó el saldo en el checkout)
                                     let queryInsert = `
                                         INSERT INTO suscripciones (usuario_id, plan_id, estado, fecha_inicio, fecha_fin)
                                         VALUES (?, ?, 'activa', NOW(), DATE_ADD(NOW(), INTERVAL 1 MONTH))
                                     `;
                                     let paramsInsert = [usuario_id, plan_id];
-
-                                    if (usarFechaExistente) {
-                                        queryInsert = `
-                                            INSERT INTO suscripciones (usuario_id, plan_id, estado, fecha_inicio, fecha_fin)
-                                            VALUES (?, ?, 'activa', NOW(), ?)
-                                        `;
-                                        paramsInsert = [usuario_id, plan_id, fechaFinHeredada];
-                                    }
 
                                     conexion.query(queryInsert, paramsInsert, async (errSuscripcion) => {
                                         if (errSuscripcion) {
@@ -1731,21 +1714,18 @@ app.get("/api/pagos/calcular/:usuario_id/:nuevo_plan_id", (req, res) => {
                 if (dias_restantes > 0) {
                     es_upgrade = true;
 
-                    // LÓGICA CORREGIDA: Calcula la diferencia exacta por día
+                    // LÓGICA NUEVA: Se da un nuevo mes desde cero, se descuenta el valor de los días no usados
                     const precioViejoPorDia = Number(sub.precio_actual) / 30;
-                    const precioNuevoPorDia = Number(nuevoPlan.precio) / 30;
-                    const diferenciaPorDia = precioNuevoPorDia - precioViejoPorDia;
+                    const saldoAFavor = precioViejoPorDia * dias_restantes;
 
-                    // El precio final es solo el costo de mejorar esos días específicos
-                    precio_final = diferenciaPorDia * dias_restantes;
-
-                    // Calculamos un 'descuento' visual para que el frontend no se rompa y lo muestre en rojo
-                    descuento = Number(nuevoPlan.precio) - precio_final;
+                    precio_final = Number(nuevoPlan.precio) - saldoAFavor;
+                    descuento = saldoAFavor;
 
                     // El mínimo de Mercado Pago (No se puede procesar S/ 0.50, por ejemplo)
                     if (precio_final < 3.00) {
                         precio_final = 3.00;
                         mensaje_minimo = true;
+                        descuento = Number(nuevoPlan.precio) - 3.00;
                     }
                 }
             }
