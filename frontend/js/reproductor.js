@@ -278,6 +278,13 @@ async function cargarContenido() {
             return;
         }
 
+        // BLINDAJE: Si el admin ocultó este contenido mientras el usuario estaba aquí
+        if (contenidoActual.activo === 0 || contenidoActual.activo === "0") {
+            alert("Este contenido ya no está disponible.");
+            window.location.replace("home.html");
+            return;
+        }
+
         document.getElementById("tituloContenido").innerText = contenidoActual.titulo || "Sin título";
         document.getElementById("tipoContenido").innerText = contenidoActual.tipo || "Contenido";
         document.getElementById("generoContenido").innerText = contenidoActual.genero || "Sin género";
@@ -345,18 +352,44 @@ async function cargarContenido() {
 
         configurarSelectorCalidad(datosStream.calidad_maxima);
 
+        // --- NUEVO CORAZÓN DE CONCURRENCIA Y AUDITORÍA EN TIEMPO REAL ---
         intervaloHeartbeat = setInterval(async () => {
-            await fetch(`${API_BASE}/api/stream/ping`, {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json"
-                },
-                body: JSON.stringify({
-                    usuario_id: usuario_id,
-                    dispositivo_token: dispositivoToken
-                })
-            });
-        }, 15000);
+            try {
+                const respuesta = await fetch(`${API_BASE}/api/stream/ping`, {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json"
+                    },
+                    body: JSON.stringify({
+                        usuario_id: usuario_id,
+                        dispositivo_token: dispositivoToken,
+                        contenido_id: contenido_id, // Enviado para validar borrado de películas
+                        perfil_id: perfil_id       // Enviado para validar borrado de perfiles
+                    })
+                });
+
+                const datos = await respuesta.json();
+
+                if (!datos.ok) {
+                    // Caso de Perfil eliminado en otro dispositivo
+                    if (datos.perfilEliminado) {
+                        alert("⚠️ " + datos.mensaje);
+                        clearInterval(intervaloHeartbeat);
+                        if (intervaloGuardado) clearInterval(intervaloGuardado);
+                        window.location.replace("seleccionar-perfil.html");
+                    }
+                    // Caso de Película borrada desde el panel administrativo
+                    else if (datos.contenidoInactivo) {
+                        alert("🎬 " + datos.mensaje);
+                        clearInterval(intervaloHeartbeat);
+                        if (intervaloGuardado) clearInterval(intervaloGuardado);
+                        window.location.replace("home.html");
+                    }
+                }
+            } catch (error) {
+                console.log("Error de comunicación en el control de sesiones:", error);
+            }
+        }, 15000); // Se ejecuta cada 15 segundos de forma silenciosa
 
         if (contenidoActual.genero) {
             cargarRecomendacionesLocales(contenidoActual.genero, contenidoActual.id);

@@ -32,14 +32,14 @@ const cron = require('node-cron');
 ========================================= */
 cron.schedule('1 0 * * *', () => {
     console.log("🕒 [CRON] Ejecutando auditoría de suscripciones vencidas...");
-    
+
     // Busca las suscripciones activas cuya fecha de fin ya pasó y las cancela
     const query = `
         UPDATE suscripciones 
         SET estado = 'vencida' 
         WHERE estado = 'activa' AND fecha_fin < NOW()
     `;
-    
+
     conexion.query(query, (err, resultados) => {
         if (err) {
             console.error("❌ [CRON] Error al actualizar suscripciones:", err);
@@ -124,15 +124,15 @@ const JWT_SECRET = process.env.JWT_SECRET || "starview_upao_secreto_2026";
 
 // Guardia 1: Verifica que sea un usuario registrado
 const verificarUsuario = (req, res, next) => {
-    const token = req.cookies.token; 
-    
+    const token = req.cookies.token;
+
     if (!token) {
         return res.status(401).json({ ok: false, mensaje: "Acceso denegado. No hay sesión activa." });
     }
 
     jwt.verify(token, JWT_SECRET, (err, decodificado) => {
         if (err) return res.status(403).json({ ok: false, mensaje: "Sesión inválida o expirada." });
-        
+
         req.usuario = decodificado; // Guardamos los datos del usuario en la petición
         next(); // ¡Puedes pasar!
     });
@@ -630,9 +630,9 @@ app.post("/api/reproducir/seguro", (req, res) => {
                     }
 
                     // Si pasó todo (pagó, existe, y tiene edad), entregamos la llave (URL)
-                    res.json({ 
-                        ok: true, 
-                        video_url: contenidos[0].video_url 
+                    res.json({
+                        ok: true,
+                        video_url: contenidos[0].video_url
                     });
                 });
             });
@@ -1253,7 +1253,7 @@ app.get("/tmdb/buscar-preview", async (req, res) => {
 
         if (respuesta.data.results && respuesta.data.results.length > 0) {
             const peli = respuesta.data.results[0]; // Tomamos la primera coincidencia
-            
+
             res.json({
                 ok: true,
                 titulo: peli.title,
@@ -1574,7 +1574,7 @@ app.get("/planes", (req, res) => {
 });
 
 /* =========================================
-   3. REGISTRO DE PAGO Y ENVÍO DE BOLETA (VÍA GOOGLE SCRIPT)
+   REGISTRO DE PAGO CON PRORRATEO ESTRICTO
 ========================================= */
 app.post("/pagos", (req, res) => {
     const { usuario_id, plan_id, metodo_pago, monto } = req.body;
@@ -1593,10 +1593,7 @@ app.post("/pagos", (req, res) => {
         [usuario_id],
         (errUsuario, usuarios) => {
             if (errUsuario || usuarios.length === 0) {
-                return res.json({
-                    ok: false,
-                    mensaje: "Usuario no encontrado"
-                });
+                return res.json({ ok: false, mensaje: "Usuario no encontrado" });
             }
 
             const usuario = usuarios[0];
@@ -1606,73 +1603,80 @@ app.post("/pagos", (req, res) => {
                 [plan_id],
                 (errPlan, planes) => {
                     if (errPlan || planes.length === 0) {
-                        return res.json({
-                            ok: false,
-                            mensaje: "Plan no encontrado"
-                        });
+                        return res.json({ ok: false, mensaje: "Plan no encontrado" });
                     }
 
                     const planNombre = planes[0].nombre;
 
+                    // [ARQUITECTURA SEGURO] Buscamos el vencimiento del plan actual antes de dar de baja
                     conexion.query(
-                        `INSERT INTO pagos
-                         (usuario_id, plan_id, metodo_pago, monto, estado, codigo_comprobante)
-                         VALUES (?, ?, ?, ?, 'pagado', ?)`,
-                        [usuario_id, plan_id, metodo_pago, monto, codigo_comprobante],
-                        (errPago, resultadoPago) => {
-                            if (errPago) {
-                                console.log(errPago);
-                                return res.json({
-                                    ok: false,
-                                    mensaje: "Error al registrar el pago"
-                                });
+                        "SELECT fecha_fin FROM suscripciones WHERE usuario_id = ? AND estado = 'activa' ORDER BY id DESC LIMIT 1",
+                        [usuario_id],
+                        (errSub, subs) => {
+                            let usarFechaExistente = false;
+                            let fechaFinHeredada = null;
+
+                            if (!errSub && subs.length > 0) {
+                                usarFechaExistente = true;
+                                fechaFinHeredada = subs[0].fecha_fin;
                             }
 
+                            // Cancelamos la suscripción vieja
                             conexion.query(
                                 "UPDATE suscripciones SET estado = 'cancelada' WHERE usuario_id = ? AND estado = 'activa'",
                                 [usuario_id],
                                 () => {
-                                    conexion.query(
-                                        `INSERT INTO suscripciones
-                                         (usuario_id, plan_id, estado, fecha_inicio, fecha_fin)
-                                         VALUES (?, ?, 'activa', NOW(), DATE_ADD(NOW(), INTERVAL 1 MONTH))`,
-                                        [usuario_id, plan_id],
-                                        async (errSuscripcion) => {
-                                            if (errSuscripcion) {
-                                                console.log(errSuscripcion);
-                                                return res.json({
-                                                    ok: false,
-                                                    mensaje: "Pago registrado, pero no se pudo activar la suscripción"
-                                                });
-                                            }
+                                    // Si es un Upgrade (usarFechaExistente = true), se mantiene el vencimiento original
+                                    // Si es una compra limpia o renovación, se le da 1 mes completo
+                                    let queryInsert = `
+                                        INSERT INTO suscripciones (usuario_id, plan_id, estado, fecha_inicio, fecha_fin)
+                                        VALUES (?, ?, 'activa', NOW(), DATE_ADD(NOW(), INTERVAL 1 MONTH))
+                                    `;
+                                    let paramsInsert = [usuario_id, plan_id];
 
-                                            const fechaHoy = new Date().toLocaleDateString("es-PE");
+                                    if (usarFechaExistente) {
+                                        queryInsert = `
+                                            INSERT INTO suscripciones (usuario_id, plan_id, estado, fecha_inicio, fecha_fin)
+                                            VALUES (?, ?, 'activa', NOW(), ?)
+                                        `;
+                                        paramsInsert = [usuario_id, plan_id, fechaFinHeredada];
+                                    }
 
-                                            if (process.env.GOOGLE_SCRIPT_URL) {
-                                                try {
-                                                    await axios.post(process.env.GOOGLE_SCRIPT_URL, {
-                                                        tipo: "boleta",
-                                                        correo: usuario.correo,
-                                                        nombre: usuario.nombre,
-                                                        monto: Number(monto).toFixed(2),
-                                                        planNombre: planNombre,
-                                                        codigo_comprobante: codigo_comprobante,
-                                                        metodo_pago: metodo_pago,
-                                                        fecha: fechaHoy
-                                                    });
-                                                } catch (errorCorreo) {
-                                                    console.log("Error contactando a Google Script:", errorCorreo.message);
-                                                }
-                                            }
-
-                                            res.json({
-                                                ok: true,
-                                                mensaje: "Suscripción activada y boleta enviada.",
-                                                pago_id: resultadoPago.insertId,
-                                                codigo_comprobante
+                                    conexion.query(queryInsert, paramsInsert, async (errSuscripcion) => {
+                                        if (errSuscripcion) {
+                                            console.log(errSuscripcion);
+                                            return res.json({
+                                                ok: false,
+                                                mensaje: "Pago registrado, pero no se pudo activar la suscripción"
                                             });
                                         }
-                                    );
+
+                                        const fechaHoy = new Date().toLocaleDateString("es-PE");
+
+                                        if (process.env.GOOGLE_SCRIPT_URL) {
+                                            try {
+                                                await axios.post(process.env.GOOGLE_SCRIPT_URL, {
+                                                    tipo: "boleta",
+                                                    correo: usuario.correo,
+                                                    nombre: usuario.nombre,
+                                                    monto: Number(monto).toFixed(2),
+                                                    planNombre: planNombre,
+                                                    codigo_comprobante: codigo_comprobante,
+                                                    metodo_pago: metodo_pago,
+                                                    fecha: fechaHoy
+                                                });
+                                            } catch (errorCorreo) {
+                                                console.log("Error contactando a Google Script:", errorCorreo.message);
+                                            }
+                                        }
+
+                                        res.json({
+                                            ok: true,
+                                            mensaje: "Suscripción activada y boleta enviada.",
+                                            pago_id: resultadoPago.insertId,
+                                            codigo_comprobante
+                                        });
+                                    });
                                 }
                             );
                         }
@@ -1683,7 +1687,7 @@ app.post("/pagos", (req, res) => {
     );
 });
 /* =========================================
-   1. CÁLCULO DE PRORRATEO Y REGLAS DE NEGOCIO
+   1. CÁLCULO DE PRORRATEO ESTRICTO (MANTIENE LA FECHA)
 ========================================= */
 app.get("/api/pagos/calcular/:usuario_id/:nuevo_plan_id", (req, res) => {
     const { usuario_id, nuevo_plan_id } = req.params;
@@ -1707,21 +1711,18 @@ app.get("/api/pagos/calcular/:usuario_id/:nuevo_plan_id", (req, res) => {
             let es_upgrade = false;
             let mensaje_minimo = false;
 
-            // Si el usuario ya tiene una suscripción activa
             if (suscripciones.length > 0) {
                 const sub = suscripciones[0];
 
-                // ESCENARIO JURADO 1: Intenta comprar el mismo plan
                 if (String(sub.plan_id) === String(nuevo_plan_id)) {
                     return res.json({ ok: false, mensaje: "Ya tienes este plan activo actualmente." });
                 }
 
-                // ESCENARIO JURADO 2: Intenta bajar a un plan más barato
                 if (Number(nuevoPlan.precio) < Number(sub.precio_actual)) {
                     return res.json({ ok: false, mensaje: "No puedes cambiar a un plan inferior mientras tu suscripción actual siga activa." });
                 }
 
-                // ESCENARIO 3: Sube de plan correctamente (Upgrade)
+                // ESCENARIO: Sube de plan correctamente (Upgrade con Prorrateo Estricto)
                 const hoy = new Date();
                 const fechaFin = new Date(sub.fecha_fin);
                 const diferenciaMilisegundos = fechaFin - hoy;
@@ -1729,14 +1730,22 @@ app.get("/api/pagos/calcular/:usuario_id/:nuevo_plan_id", (req, res) => {
 
                 if (dias_restantes > 0) {
                     es_upgrade = true;
-                    const precioPorDia = Number(sub.precio_actual) / 30;
-                    descuento = precioPorDia * dias_restantes;
-                    precio_final = precio_final - descuento;
 
-                    // ESCENARIO JURADO 3: El mínimo de Mercado Pago
+                    // LÓGICA CORREGIDA: Calcula la diferencia exacta por día
+                    const precioViejoPorDia = Number(sub.precio_actual) / 30;
+                    const precioNuevoPorDia = Number(nuevoPlan.precio) / 30;
+                    const diferenciaPorDia = precioNuevoPorDia - precioViejoPorDia;
+
+                    // El precio final es solo el costo de mejorar esos días específicos
+                    precio_final = diferenciaPorDia * dias_restantes;
+
+                    // Calculamos un 'descuento' visual para que el frontend no se rompa y lo muestre en rojo
+                    descuento = Number(nuevoPlan.precio) - precio_final;
+
+                    // El mínimo de Mercado Pago (No se puede procesar S/ 0.50, por ejemplo)
                     if (precio_final < 3.00) {
                         precio_final = 3.00;
-                        mensaje_minimo = true; // Avisamos al frontend para que muestre la advertencia
+                        mensaje_minimo = true;
                     }
                 }
             }
@@ -1775,7 +1784,7 @@ app.post("/mercadopago/crear-preferencia", (req, res) => {
                         id: String(plan.id),
                         title: `Suscripción StarView - Plan ${plan.nombre}`,
                         quantity: 1,
-                        unit_price: precioCobrar, 
+                        unit_price: precioCobrar,
                         currency_id: "PEN"
                     }
                 ],
@@ -2303,18 +2312,42 @@ app.post("/api/stream/iniciar", (req, res) => {
     );
 });
 
+/* =========================================
+   HEARTBEAT EXPANDIDO: DETECCIÓN DE ELIMINACIONES EN TIEMPO REAL
+========================================= */
 app.post("/api/stream/ping", (req, res) => {
-    const { usuario_id, dispositivo_token } = req.body;
+    const { usuario_id, dispositivo_token, contenido_id, perfil_id } = req.body;
 
-    conexion.query(
-        "UPDATE reproducciones_activas SET ultima_actividad = NOW() WHERE usuario_id = ? AND dispositivo_token = ?",
-        [usuario_id, dispositivo_token],
-        () => {
-            res.json({
-                ok: true
+    // 1. Auditoría de Perfil: ¿Sigue existiendo el perfil en la base de datos?
+    conexion.query("SELECT COUNT(*) AS existe FROM perfiles WHERE id = ?", [perfil_id], (errPerf, resPerf) => {
+        if (errPerf || resPerf[0].existe === 0) {
+            return res.json({
+                ok: false,
+                perfilEliminado: true,
+                mensaje: "Este perfil ya no existe. Redireccionando..."
             });
         }
-    );
+
+        // 2. Auditoría de Contenido: ¿La película fue eliminada o puesta en oculto (activo = 0)?
+        conexion.query("SELECT COALESCE(activo, 1) AS activo FROM contenido WHERE id = ?", [contenido_id], (errCont, resCont) => {
+            if (errCont || resCont.length === 0 || resCont[0].activo === 0) {
+                return res.json({
+                    ok: false,
+                    contenidoInactivo: true,
+                    mensaje: "Este contenido ya no se encuentra disponible."
+                });
+            }
+
+            // 3. Concurrencia habitual: si todo está en regla, refrescamos actividad
+            conexion.query(
+                "UPDATE reproducciones_activas SET ultima_actividad = NOW() WHERE usuario_id = ? AND dispositivo_token = ?",
+                [usuario_id, dispositivo_token],
+                () => {
+                    res.json({ ok: true });
+                }
+            );
+        });
+    });
 });
 
 app.post("/api/stream/cerrar", (req, res) => {
@@ -2379,7 +2412,7 @@ app.get("/api/pagos/recibo/:id", (req, res) => {
 
         // --- SERIE DE BOLETA ELECTRÓNICA ---
         const numerosComprobante = String(pago.codigo_comprobante).replace(/[^0-9]/g, '');
-        const correlativo = numerosComprobante.padStart(8, '0').slice(-8); 
+        const correlativo = numerosComprobante.padStart(8, '0').slice(-8);
         const serieBoleta = `EB01-${correlativo}`;
 
         // --- CONVERSOR DE NÚMEROS A LETRAS (OBLIGATORIO EN SUNAT) ---
@@ -2387,12 +2420,12 @@ app.get("/api/pagos/recibo/:id", (req, res) => {
             const unidades = ["CERO", "UN", "DOS", "TRES", "CUATRO", "CINCO", "SEIS", "SIETE", "OCHO", "NUEVE", "DIEZ", "ONCE", "DOCE", "TRECE", "CATORCE", "QUINCE", "DIECISEIS", "DIECISIETE", "DIECIOCHO", "DIECINUEVE", "VEINTE"];
             const decenas = ["", "", "VEINTI", "TREINTA", "CUARENTA", "CINCUENTA", "SESENTA", "SETENTA", "OCHENTA", "NOVENTA"];
             if (num <= 20) return unidades[num];
-            if (num < 30) return "VEINTI" + unidades[num-20];
-            let d = Math.floor(num/10);
+            if (num < 30) return "VEINTI" + unidades[num - 20];
+            let d = Math.floor(num / 10);
             let u = num % 10;
             return decenas[d] + (u > 0 ? " Y " + unidades[u] : "");
         }
-        
+
         const entero = Math.floor(totalNum);
         const decimales = Math.round((totalNum - entero) * 100).toString().padStart(2, '0');
         const textoMonto = `SON: ${numeroALetras(entero)} Y ${decimales}/100 SOLES`;
@@ -2691,7 +2724,7 @@ app.delete("/api/admin/contenido/:id", verificarAdmin, (req, res) => {
                     console.error("Error al eliminar la película de la BD:", errContenido);
                     return res.json({ ok: false, mensaje: "Error en la base de datos al eliminar." });
                 }
-                
+
                 res.json({ ok: true, mensaje: "Película eliminada definitivamente." });
             });
         });
@@ -2706,10 +2739,10 @@ app.get("/panel-admin/:usuario_id", (req, res) => {
     conexion.query("SELECT correo FROM usuarios WHERE id = ?", [usuario_id], (errAdmin, usuarios) => {
         if (errAdmin || usuarios.length === 0) return res.send("<h1>Usuario no encontrado</h1>");
 
-        const CORREO_ADMINISTRADOR = "soporte.starview@gmail.com"; 
+        const CORREO_ADMINISTRADOR = "soporte.starview@gmail.com";
 
         if (usuarios[0].correo !== CORREO_ADMINISTRADOR) {
-            return res.redirect("/seleccionar-perfil.html"); 
+            return res.redirect("/seleccionar-perfil.html");
         }
 
         const queryStats = `SELECT 
@@ -2727,7 +2760,7 @@ app.get("/panel-admin/:usuario_id", (req, res) => {
         conexion.query(queryStats, [CORREO_ADMINISTRADOR], (errStats, resStats) => {
             conexion.query(queryCRM, [CORREO_ADMINISTRADOR], (errCRM, resCRM) => {
                 conexion.query(queryCMS, (errCMS, resCMS) => {
-                    
+
                     const stats = resStats[0] || {};
                     const clientes = resCRM || [];
                     const catalogo = resCMS || [];
@@ -2741,10 +2774,10 @@ app.get("/panel-admin/:usuario_id", (req, res) => {
 
                     const filasCMS = catalogo.map(c => {
                         const peliDatos = JSON.stringify(c).replace(/"/g, '&quot;');
-                        
+
                         // Si está inactiva, la pintamos de rojo/gris para que el admin lo note
-                        const visibilidad = c.activo === 0 
-                            ? `<span class="badge" style="background: rgba(239, 68, 68, 0.2); color: #ef4444; border: 1px solid #ef4444;">OCULTA</span>` 
+                        const visibilidad = c.activo === 0
+                            ? `<span class="badge" style="background: rgba(239, 68, 68, 0.2); color: #ef4444; border: 1px solid #ef4444;">OCULTA</span>`
                             : `<span class="badge" style="background: rgba(16, 185, 129, 0.2); color: #10b981; border: 1px solid #10b981;">PÚBLICA</span>`;
 
                         const opacidad = c.activo === 0 ? "opacity: 0.5;" : "";
