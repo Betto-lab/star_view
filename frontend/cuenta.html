@@ -70,7 +70,15 @@
         <div class="input-group" style="margin-bottom: 15px;">
             <input type="email" id="nuevoCorreo" placeholder="Nuevo correo electrónico">
         </div>
-        <button id="btnActualizarCorreo" class="btn btn-primary" style="width: 100%;">Actualizar Correo</button>
+        
+        <div id="seccionCodigoCorreo" style="display: none; margin-bottom: 15px;">
+            <p style="color: #aaa; margin-bottom: 10px; font-size: 0.9em;">Se ha enviado un código de 6 dígitos al nuevo correo.</p>
+            <div class="input-group">
+                <input type="text" id="codigoCorreo" placeholder="Ingresa el código (ej. 123456)" maxlength="6">
+            </div>
+        </div>
+
+        <button id="btnActualizarCorreo" class="btn btn-primary" style="width: 100%;">Siguiente (Enviar Código)</button>
         <p id="msgCorreo" style="margin-top: 10px; font-size: 0.9em; text-align: center;"></p>
     </div>
 

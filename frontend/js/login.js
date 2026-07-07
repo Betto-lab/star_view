@@ -99,9 +99,11 @@ async function iniciarSesion() {
         if (mantenerSesion) {
             localStorage.setItem("usuario_id", usuarioId);
             localStorage.setItem("nombre_usuario", usuario.nombre || usuario.nombre_usuario || "");
+            localStorage.setItem("sesion_version", usuario.sesion_version || 1);
         } else {
             sessionStorage.setItem("usuario_id", usuarioId);
             sessionStorage.setItem("nombre_usuario", usuario.nombre || usuario.nombre_usuario || "");
+            sessionStorage.setItem("sesion_version", usuario.sesion_version || 1);
         }
 
         // Limpiar perfiles previos de cualquier sesión anterior

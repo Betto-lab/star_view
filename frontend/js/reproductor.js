@@ -363,12 +363,22 @@ async function cargarContenido() {
                     body: JSON.stringify({
                         usuario_id: usuario_id,
                         dispositivo_token: dispositivoToken,
-                        contenido_id: contenido_id, // Enviado para validar borrado de películas
-                        perfil_id: perfil_id       // Enviado para validar borrado de perfiles
+                        contenido_id: contenido_id,
+                        perfil_id: perfil_id,
+                        sesion_version: localStorage.getItem("sesion_version") || sessionStorage.getItem("sesion_version") || 1
                     })
                 });
 
                 const datos = await respuesta.json();
+
+                if (datos.sesionCerrada) {
+                    clearInterval(intervaloHeartbeat);
+                    video.pause();
+                    localStorage.clear();
+                    sessionStorage.clear();
+                    window.location.replace("login.html");
+                    return;
+                }
 
                 if (!datos.ok) {
                     // Si algo falla, pausamos el video inmediatamente por seguridad

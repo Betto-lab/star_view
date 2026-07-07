@@ -453,20 +453,45 @@ app.get("/api/cuenta/:usuario_id", (req, res) => {
     });
 });
 
-// 2. Actualizar correo
-app.put("/api/cuenta/correo", (req, res) => {
-    const { usuario_id, nuevo_correo } = req.body;
-    if (!usuario_id || !nuevo_correo) return res.json({ ok: false, mensaje: "Datos incompletos" });
+const cambiosCorreoPeticiones = new Map();
+
+// 2. Solicitar Cambio de Correo
+app.post("/api/cuenta/correo/solicitar", (req, res) => {
+    const { usuario_id, nuevo_correo, nombre } = req.body;
+    if (!usuario_id || !nuevo_correo || !nombre) return res.json({ ok: false, mensaje: "Datos incompletos" });
 
     // Validar si el correo ya existe
-    conexion.query("SELECT id FROM usuarios WHERE correo = ? AND id != ?", [nuevo_correo, usuario_id], (err, resultados) => {
+    conexion.query("SELECT id FROM usuarios WHERE correo = ? AND id != ?", [nuevo_correo, usuario_id], async (err, resultados) => {
         if (err) return res.json({ ok: false, mensaje: "Error del servidor" });
         if (resultados.length > 0) return res.json({ ok: false, mensaje: "El correo ya está en uso por otra cuenta" });
 
-        conexion.query("UPDATE usuarios SET correo = ? WHERE id = ?", [nuevo_correo, usuario_id], (errUpdate) => {
-            if (errUpdate) return res.json({ ok: false, mensaje: "Error al actualizar correo" });
-            res.json({ ok: true });
-        });
+        const codigo = generarCodigoVerificacion();
+        cambiosCorreoPeticiones.set(nuevo_correo, { codigo, creado: Date.now() });
+
+        try {
+            await enviarCorreoVerificacion(nuevo_correo, nombre, codigo, "cuenta");
+            res.json({ ok: true, mensaje: "Código enviado" });
+        } catch (e) {
+            console.error(e);
+            res.json({ ok: false, mensaje: "Error al enviar el correo" });
+        }
+    });
+});
+
+// 2.1 Confirmar Cambio de Correo
+app.put("/api/cuenta/correo/confirmar", (req, res) => {
+    const { usuario_id, nuevo_correo, codigo } = req.body;
+    if (!usuario_id || !nuevo_correo || !codigo) return res.json({ ok: false, mensaje: "Faltan datos" });
+
+    const peticion = cambiosCorreoPeticiones.get(nuevo_correo);
+    if (!peticion || peticion.codigo !== codigo || Date.now() - peticion.creado > 10 * 60 * 1000) {
+        return res.json({ ok: false, mensaje: "Código inválido o expirado" });
+    }
+
+    conexion.query("UPDATE usuarios SET correo = ? WHERE id = ?", [nuevo_correo, usuario_id], (errUpdate) => {
+        if (errUpdate) return res.json({ ok: false, mensaje: "Error al actualizar correo" });
+        cambiosCorreoPeticiones.delete(nuevo_correo);
+        res.json({ ok: true });
     });
 });
 
@@ -485,6 +510,11 @@ app.put("/api/cuenta/password", (req, res) => {
             return res.json({ ok: false, mensaje: "La contraseña actual es incorrecta" });
         }
 
+        const coincideNueva = await bcrypt.compare(password_nueva, hashActual);
+        if (coincideNueva) {
+            return res.json({ ok: false, mensaje: "La nueva contraseña no puede ser igual a la actual" });
+        }
+
         const nuevoHash = await bcrypt.hash(password_nueva, 10);
         conexion.query("UPDATE usuarios SET password = ? WHERE id = ?", [nuevoHash, usuario_id], (errUpdate) => {
             if (errUpdate) return res.json({ ok: false, mensaje: "Error al actualizar contraseña" });
@@ -498,12 +528,9 @@ app.post("/api/cuenta/cerrar-sesiones", (req, res) => {
     const { usuario_id } = req.body;
     if (!usuario_id) return res.json({ ok: false });
 
-    // En una implementación con sesiones de base de datos, aquí se borrarían o invalidarían los tokens.
-    // Dado que el sistema usa tokens locales (localStorage) o un sistema simple, forzaremos 
-    // la desconexión limpiando la tabla de `reproducciones_activas` para evitar conflictos 
-    // y devolvemos OK para que el frontend limpie el localStorage.
-    conexion.query("DELETE FROM reproducciones_activas WHERE usuario_id = ?", [usuario_id], (err) => {
-        if (err) return res.json({ ok: false, mensaje: "Error al invalidar sesiones activas" });
+    // Incrementamos la versión de sesión para expulsar a los demás
+    conexion.query("UPDATE usuarios SET sesion_version = COALESCE(sesion_version, 1) + 1 WHERE id = ?", [usuario_id], (err) => {
+        if (err) return res.json({ ok: false, mensaje: "Error al cerrar sesiones" });
         res.json({ ok: true });
     });
 });
@@ -581,11 +608,13 @@ app.post("/login", (req, res) => {
 
             res.json({
                 ok: true,
-                mensaje: "Inicio de sesión correcto",
+                mensaje: "Inicio de sesión exitoso",
                 usuario: {
                     id: usuario.id,
                     nombre: usuario.nombre,
-                    correo: usuario.correo
+                    correo: usuario.correo,
+                    rol: usuario.rol,
+                    sesion_version: usuario.sesion_version || 1
                 }
             });
         }
@@ -2381,17 +2410,22 @@ app.post("/api/stream/iniciar", (req, res) => {
    HEARTBEAT EXPANDIDO: DETECCIÓN DE ELIMINACIONES EN TIEMPO REAL
 ========================================= */
 app.post("/api/stream/ping", (req, res) => {
-    const { usuario_id, dispositivo_token, contenido_id, perfil_id } = req.body;
+    const { usuario_id, dispositivo_token, contenido_id, perfil_id, sesion_version } = req.body;
 
-    // 1. Auditoría de Perfil: ¿Sigue existiendo el perfil en la base de datos?
-    conexion.query("SELECT COUNT(*) AS existe FROM perfiles WHERE id = ?", [perfil_id], (errPerf, resPerf) => {
-        if (errPerf || resPerf[0].existe === 0) {
-            return res.json({
-                ok: false,
-                perfilEliminado: true,
-                mensaje: "Este perfil ya no existe. Redireccionando..."
-            });
+    conexion.query("SELECT sesion_version FROM usuarios WHERE id = ?", [usuario_id], (errUsr, resUsr) => {
+        if (errUsr || resUsr.length === 0 || Number(resUsr[0].sesion_version) > Number(sesion_version)) {
+            return res.json({ ok: false, sesionCerrada: true, mensaje: "Sesión cerrada globalmente" });
         }
+
+        // 1. Auditoría de Perfil: ¿Sigue existiendo el perfil en la base de datos?
+        conexion.query("SELECT COUNT(*) AS existe FROM perfiles WHERE id = ?", [perfil_id], (errPerf, resPerf) => {
+            if (errPerf || resPerf[0].existe === 0) {
+                return res.json({
+                    ok: false,
+                    perfilEliminado: true,
+                    mensaje: "Este perfil ya no existe. Redireccionando..."
+                });
+            }
 
         // 2. Auditoría de Contenido: ¿La película fue eliminada o puesta en oculto (activo = 0)?
         conexion.query("SELECT COALESCE(activo, 1) AS activo FROM contenido WHERE id = ?", [contenido_id], (errCont, resCont) => {
@@ -2412,23 +2446,29 @@ app.post("/api/stream/ping", (req, res) => {
                 }
             );
         });
-    });
+        }); // <- Added for errPerf
+    }); // <- Added for errUsr
 });
 
 /* =========================================
    HEARTBEAT GLOBAL: HOME Y OTRAS VISTAS
 ========================================= */
 app.post("/api/home/ping", (req, res) => {
-    const { perfil_id, catalogo_length } = req.body;
+    const { usuario_id, perfil_id, catalogo_length, sesion_version } = req.body;
 
-    if (!perfil_id) {
+    if (!usuario_id || !perfil_id) {
         return res.json({ ok: false });
     }
 
-    conexion.query("SELECT COUNT(*) AS existe FROM perfiles WHERE id = ?", [perfil_id], (errPerf, resPerf) => {
-        if (errPerf || resPerf[0].existe === 0) {
-            return res.json({ ok: false, perfilEliminado: true });
+    conexion.query("SELECT sesion_version FROM usuarios WHERE id = ?", [usuario_id], (errUsr, resUsr) => {
+        if (errUsr || resUsr.length === 0 || Number(resUsr[0].sesion_version) > Number(sesion_version)) {
+            return res.json({ ok: false, sesionCerrada: true });
         }
+
+        conexion.query("SELECT COUNT(*) AS existe FROM perfiles WHERE id = ?", [perfil_id], (errPerf, resPerf) => {
+            if (errPerf || resPerf[0].existe === 0) {
+                return res.json({ ok: false, perfilEliminado: true });
+            }
         
         conexion.query("SELECT COUNT(*) AS total FROM contenido WHERE COALESCE(activo, 1) = 1", (errCont, resCont) => {
             if (errCont) {
@@ -2441,7 +2481,8 @@ app.post("/api/home/ping", (req, res) => {
             }
             res.json({ ok: true, catalogoCambio: false });
         });
-    });
+        }); // <- Added for errPerf
+    }); // <- Added for errUsr
 });
 
 

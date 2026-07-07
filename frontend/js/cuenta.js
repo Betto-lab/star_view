@@ -20,9 +20,12 @@ document.addEventListener("DOMContentLoaded", async () => {
         document.getElementById("correoActual").innerText = "Error al cargar";
     }
 
+    let modoCodigo = false;
+
     // Actualizar Correo
     document.getElementById("btnActualizarCorreo").addEventListener("click", async () => {
         const nuevoCorreo = document.getElementById("nuevoCorreo").value.trim();
+        const codigo = document.getElementById("codigoCorreo").value.trim();
         const msg = document.getElementById("msgCorreo");
         msg.innerText = "";
         msg.style.color = "white";
@@ -33,26 +36,75 @@ document.addEventListener("DOMContentLoaded", async () => {
             return;
         }
 
-        try {
-            const res = await fetch(`${API_BASE_CUENTA}/api/cuenta/correo`, {
-                method: "PUT",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ usuario_id, nuevo_correo: nuevoCorreo })
-            });
-            const datos = await res.json();
+        if (nuevoCorreo === document.getElementById("correoActual").innerText.trim()) {
+            msg.innerText = "El nuevo correo debe ser distinto al actual.";
+            msg.style.color = "#ffb4b8";
+            return;
+        }
 
-            if (datos.ok) {
-                msg.innerText = "Correo actualizado correctamente.";
-                msg.style.color = "#4caf50";
-                document.getElementById("correoActual").innerText = nuevoCorreo;
-                document.getElementById("nuevoCorreo").value = "";
-            } else {
-                msg.innerText = datos.mensaje || "Error al actualizar correo.";
+        if (!modoCodigo) {
+            // Paso 1: Solicitar código
+            try {
+                const res = await fetch(`${API_BASE_CUENTA}/api/cuenta/correo/solicitar`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ 
+                        usuario_id, 
+                        nuevo_correo: nuevoCorreo, 
+                        nombre: localStorage.getItem("nombre_usuario") || sessionStorage.getItem("nombre_usuario") || "Usuario" 
+                    })
+                });
+                const datos = await res.json();
+
+                if (datos.ok) {
+                    modoCodigo = true;
+                    document.getElementById("seccionCodigoCorreo").style.display = "block";
+                    document.getElementById("nuevoCorreo").disabled = true;
+                    document.getElementById("btnActualizarCorreo").innerText = "Confirmar Cambio";
+                    msg.innerText = "Código enviado. Revisa tu bandeja de entrada.";
+                    msg.style.color = "#4caf50";
+                } else {
+                    msg.innerText = datos.mensaje || "Error al solicitar código.";
+                    msg.style.color = "#ffb4b8";
+                }
+            } catch (e) {
+                msg.innerText = "Error de conexión.";
                 msg.style.color = "#ffb4b8";
             }
-        } catch (e) {
-            msg.innerText = "Error de conexión.";
-            msg.style.color = "#ffb4b8";
+        } else {
+            // Paso 2: Confirmar código
+            if (!codigo) {
+                msg.innerText = "Por favor, ingresa el código de 6 dígitos.";
+                msg.style.color = "#ffb4b8";
+                return;
+            }
+
+            try {
+                const res = await fetch(`${API_BASE_CUENTA}/api/cuenta/correo/confirmar`, {
+                    method: "PUT",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ usuario_id, nuevo_correo: nuevoCorreo, codigo })
+                });
+                const datos = await res.json();
+
+                if (datos.ok) {
+                    msg.innerText = "Correo actualizado correctamente.";
+                    msg.style.color = "#4caf50";
+                    document.getElementById("correoActual").innerText = nuevoCorreo;
+                    document.getElementById("nuevoCorreo").value = "";
+                    document.getElementById("nuevoCorreo").disabled = false;
+                    document.getElementById("codigoCorreo").value = "";
+                    document.getElementById("seccionCodigoCorreo").style.display = "none";
+                    document.getElementById("btnActualizarCorreo").innerText = "Siguiente (Enviar Código)";
+                    modoCodigo = false;
+                } else {
+                    msg.innerText = datos.mensaje || "Código inválido.";
+                    msg.style.color = "#ffb4b8";
+                }
+            } catch (e) {
+                msg.innerText = "Error de conexión.";
+                msg.style.color = "#ffb4b8";
+            }
         }
     });
 

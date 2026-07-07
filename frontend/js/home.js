@@ -680,12 +680,21 @@ function iniciarHeartbeatGlobal() {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
+                    usuario_id: localStorage.getItem("usuario_id") || sessionStorage.getItem("usuario_id"),
+                    sesion_version: localStorage.getItem("sesion_version") || sessionStorage.getItem("sesion_version") || 1,
                     perfil_id,
                     catalogo_length: window.catalogoGlobal ? window.catalogoGlobal.length : 0
                 })
             });
 
             const datos = await respuesta.json();
+
+            if (datos.sesionCerrada) {
+                localStorage.clear();
+                sessionStorage.clear();
+                window.location.replace("login.html");
+                return;
+            }
 
             if (datos.perfilEliminado) {
                 // Nos borraron el perfil en otra ventana, sacarlo de aquí
