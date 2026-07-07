@@ -2171,9 +2171,25 @@ app.get("/recomendaciones/historial/:perfil_id", (req, res) => {
                 [perfil_id],
                 (error, resultados) => {
                     if (error || resultados.length === 0) {
-                        return res.json({
-                            ok: false,
-                            mensaje: "No hay historial suficiente"
+                        // FALLBACK: Si no hay historial, sugerimos películas generales/aleatorias
+                        let fallbackSql = "SELECT * FROM contenido WHERE COALESCE(activo, 1) = 1";
+                        if (esInfantil) {
+                            fallbackSql += " AND infantil = 1";
+                        }
+                        fallbackSql += " ORDER BY RAND() LIMIT 12"; // Aleatorio para variar
+
+                        return conexion.query(fallbackSql, (errorFallback, peliculas) => {
+                            if (errorFallback) {
+                                return res.json({
+                                    ok: false,
+                                    mensaje: "No hay historial suficiente y falló el fallback"
+                                });
+                            }
+                            return res.json({
+                                ok: true,
+                                genero: "Selección de StarView", // Título genérico
+                                recomendaciones: peliculas
+                            });
                         });
                     }
 
