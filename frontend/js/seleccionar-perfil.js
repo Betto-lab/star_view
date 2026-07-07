@@ -536,4 +536,39 @@ function mostrarFormularioPerfil() {
         modal.classList.add("show");
     }
 }
-;
+
+// ==========================================
+// HEARTBEAT DE SEGURIDAD (CIERRE GLOBAL)
+// ==========================================
+function iniciarHeartbeatBasico() {
+    setInterval(async () => {
+        const usuario_id = obtenerUsuarioId();
+        if (!usuario_id) return;
+
+        try {
+            const respuesta = await fetch(`${API_BASE}/api/usuario/ping`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    usuario_id: usuario_id,
+                    sesion_version: localStorage.getItem("sesion_version") || sessionStorage.getItem("sesion_version") || 1
+                })
+            });
+
+            const datos = await respuesta.json();
+
+            if (datos.sesionCerrada) {
+                localStorage.clear();
+                sessionStorage.clear();
+                window.location.replace("login.html");
+            }
+        } catch (error) {
+            console.error("Error validando sesión:", error);
+        }
+    }, 15000);
+}
+
+// Iniciar heartbeat al cargar
+document.addEventListener("DOMContentLoaded", () => {
+    iniciarHeartbeatBasico();
+});

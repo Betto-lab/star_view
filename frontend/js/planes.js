@@ -100,3 +100,28 @@ function seleccionarPlan(id, nombre, precio) {
 }
 
 document.addEventListener("DOMContentLoaded", cargarPlanes);
+// ==========================================
+// HEARTBEAT DE SEGURIDAD (CIERRE GLOBAL)
+// ==========================================
+(function iniciarHeartbeatGlobal() {
+    setInterval(async () => {
+        const usuario_id = localStorage.getItem("usuario_id") || sessionStorage.getItem("usuario_id");
+        if (!usuario_id) return;
+        try {
+            const respuesta = await fetch(window.location.origin + "/api/usuario/ping", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    usuario_id: usuario_id,
+                    sesion_version: localStorage.getItem("sesion_version") || sessionStorage.getItem("sesion_version") || 1
+                })
+            });
+            const datos = await respuesta.json();
+            if (datos.sesionCerrada) {
+                localStorage.clear();
+                sessionStorage.clear();
+                window.location.replace("login.html");
+            }
+        } catch (error) {}
+    }, 15000);
+})();

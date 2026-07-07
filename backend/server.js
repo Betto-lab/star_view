@@ -2451,7 +2451,21 @@ app.post("/api/stream/ping", (req, res) => {
 });
 
 /* =========================================
-   HEARTBEAT GLOBAL: HOME Y OTRAS VISTAS
+   HEARTBEAT BÁSICO: SELECCIÓN DE PERFIL
+========================================= */
+app.post("/api/usuario/ping", (req, res) => {
+    const { usuario_id, sesion_version } = req.body;
+    if (!usuario_id) return res.json({ ok: false });
+
+    conexion.query("SELECT sesion_version FROM usuarios WHERE id = ?", [usuario_id], (errUsr, resUsr) => {
+        if (errUsr || resUsr.length === 0 || Number(resUsr[0].sesion_version) > Number(sesion_version)) {
+            return res.json({ ok: false, sesionCerrada: true });
+        }
+        res.json({ ok: true });
+    });
+});
+
+/* =========================================
 ========================================= */
 app.post("/api/home/ping", (req, res) => {
     const { usuario_id, perfil_id, catalogo_length, sesion_version } = req.body;
