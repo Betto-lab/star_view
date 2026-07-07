@@ -780,6 +780,50 @@ async function inicializarHome() {
     if (inputOverlay) {
         inputOverlay.addEventListener("input", realizarBusquedaFlotante);
     }
+
+    iniciarHeartbeatGlobal();
+}
+
+function iniciarHeartbeatGlobal() {
+    setInterval(async () => {
+        const perfil_id = obtenerPerfilId();
+        if (!perfil_id) return;
+
+        try {
+            const respuesta = await fetch(`${API_BASE}/api/home/ping`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    perfil_id,
+                    catalogo_length: window.catalogoGlobal ? window.catalogoGlobal.length : 0
+                })
+            });
+
+            const datos = await respuesta.json();
+
+            if (datos.perfilEliminado) {
+                // Nos borraron el perfil en otra ventana, sacarlo de aquí
+                localStorage.removeItem("perfil_id");
+                sessionStorage.removeItem("perfil_id");
+                window.location.replace("seleccionar-perfil.html");
+                return;
+            }
+
+            if (datos.catalogoCambio) {
+                // Hay cambios en el catálogo (ej: eliminaron peli) recargamos silenciosamente
+                await cargarCatalogo();
+                
+                // Si está buscando activamente, actualizamos la búsqueda
+                const inputOverlay = document.getElementById("searchInputOverlay");
+                const overlay = document.getElementById("searchOverlay");
+                if (overlay && !overlay.classList.contains("oculto") && inputOverlay && inputOverlay.value.trim().length > 0) {
+                    realizarBusquedaFlotante();
+                }
+            }
+        } catch (error) {
+            console.log("Error en heartbeat global:", error);
+        }
+    }, 15000); // 15 segundos
 }
 
 inicializarHome();

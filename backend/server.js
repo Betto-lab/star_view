@@ -555,7 +555,7 @@ app.get("/contenido/perfil/:perfil_id", (req, res) => {
     }
 
     conexion.query(
-        "SELECT * FROM contenido WHERE infantil = 1 AND COALESCE(activo, 1) = 1 ORDER BY id DESC",
+        "SELECT * FROM perfiles WHERE id = ?",
         [perfil_id],
         (error, perfiles) => {
             if (error) {
@@ -569,7 +569,7 @@ app.get("/contenido/perfil/:perfil_id", (req, res) => {
 
             const esInfantil = Number(perfiles[0].infantil) === 1;
 
-            let sql = "SELECT * FROM contenido";
+            let sql = "SELECT * FROM contenido WHERE COALESCE(activo, 1) = 1";
             const parametros = [];
 
             if (esInfantil) {
@@ -2349,6 +2349,36 @@ app.post("/api/stream/ping", (req, res) => {
         });
     });
 });
+
+/* =========================================
+   HEARTBEAT GLOBAL: HOME Y OTRAS VISTAS
+========================================= */
+app.post("/api/home/ping", (req, res) => {
+    const { perfil_id, catalogo_length } = req.body;
+
+    if (!perfil_id) {
+        return res.json({ ok: false });
+    }
+
+    conexion.query("SELECT COUNT(*) AS existe FROM perfiles WHERE id = ?", [perfil_id], (errPerf, resPerf) => {
+        if (errPerf || resPerf[0].existe === 0) {
+            return res.json({ ok: false, perfilEliminado: true });
+        }
+        
+        conexion.query("SELECT COUNT(*) AS total FROM contenido WHERE COALESCE(activo, 1) = 1", (errCont, resCont) => {
+            if (errCont) {
+                return res.json({ ok: true, catalogoCambio: false });
+            }
+            
+            const totalActual = resCont[0].total;
+            if (catalogo_length !== undefined && totalActual !== catalogo_length) {
+                return res.json({ ok: true, catalogoCambio: true });
+            }
+            res.json({ ok: true, catalogoCambio: false });
+        });
+    });
+});
+
 
 app.post("/api/stream/cerrar", (req, res) => {
     const { usuario_id, dispositivo_token } = req.body;
