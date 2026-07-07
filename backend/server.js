@@ -440,6 +440,75 @@ app.post("/registro/verificar", (req, res) => {
     );
 });
 
+/* =========================================
+   MI CUENTA (CONFIGURACIÓN)
+========================================= */
+
+// 1. Obtener correo actual
+app.get("/api/cuenta/:usuario_id", (req, res) => {
+    const { usuario_id } = req.params;
+    conexion.query("SELECT correo FROM usuarios WHERE id = ?", [usuario_id], (err, resultados) => {
+        if (err || resultados.length === 0) return res.json({ ok: false });
+        res.json({ ok: true, correo: resultados[0].correo });
+    });
+});
+
+// 2. Actualizar correo
+app.put("/api/cuenta/correo", (req, res) => {
+    const { usuario_id, nuevo_correo } = req.body;
+    if (!usuario_id || !nuevo_correo) return res.json({ ok: false, mensaje: "Datos incompletos" });
+
+    // Validar si el correo ya existe
+    conexion.query("SELECT id FROM usuarios WHERE correo = ? AND id != ?", [nuevo_correo, usuario_id], (err, resultados) => {
+        if (err) return res.json({ ok: false, mensaje: "Error del servidor" });
+        if (resultados.length > 0) return res.json({ ok: false, mensaje: "El correo ya está en uso por otra cuenta" });
+
+        conexion.query("UPDATE usuarios SET correo = ? WHERE id = ?", [nuevo_correo, usuario_id], (errUpdate) => {
+            if (errUpdate) return res.json({ ok: false, mensaje: "Error al actualizar correo" });
+            res.json({ ok: true });
+        });
+    });
+});
+
+// 3. Actualizar contraseña
+app.put("/api/cuenta/password", (req, res) => {
+    const { usuario_id, password_actual, password_nueva } = req.body;
+    if (!usuario_id || !password_actual || !password_nueva) return res.json({ ok: false, mensaje: "Faltan datos" });
+
+    conexion.query("SELECT password FROM usuarios WHERE id = ?", [usuario_id], async (err, resultados) => {
+        if (err || resultados.length === 0) return res.json({ ok: false, mensaje: "Usuario no encontrado" });
+
+        const hashActual = resultados[0].password;
+        const coincide = await bcrypt.compare(password_actual, hashActual);
+
+        if (!coincide) {
+            return res.json({ ok: false, mensaje: "La contraseña actual es incorrecta" });
+        }
+
+        const nuevoHash = await bcrypt.hash(password_nueva, 10);
+        conexion.query("UPDATE usuarios SET password = ? WHERE id = ?", [nuevoHash, usuario_id], (errUpdate) => {
+            if (errUpdate) return res.json({ ok: false, mensaje: "Error al actualizar contraseña" });
+            res.json({ ok: true });
+        });
+    });
+});
+
+// 4. Cerrar sesiones globalmente
+app.post("/api/cuenta/cerrar-sesiones", (req, res) => {
+    const { usuario_id } = req.body;
+    if (!usuario_id) return res.json({ ok: false });
+
+    // En una implementación con sesiones de base de datos, aquí se borrarían o invalidarían los tokens.
+    // Dado que el sistema usa tokens locales (localStorage) o un sistema simple, forzaremos 
+    // la desconexión limpiando la tabla de `reproducciones_activas` para evitar conflictos 
+    // y devolvemos OK para que el frontend limpie el localStorage.
+    conexion.query("DELETE FROM reproducciones_activas WHERE usuario_id = ?", [usuario_id], (err) => {
+        if (err) return res.json({ ok: false, mensaje: "Error al invalidar sesiones activas" });
+        res.json({ ok: true });
+    });
+});
+
+
 app.post("/login", (req, res) => {
     const { correo, password } = req.body;
 

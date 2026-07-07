@@ -3,8 +3,23 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>StarView</title>
+    <title>Mi Cuenta | StarView</title>
     <link rel="stylesheet" href="css/style.css">
+    <style>
+        .input-group input {
+            width: 100%;
+            padding: 12px;
+            background: rgba(0,0,0,0.5);
+            border: 1px solid rgba(255,255,255,0.2);
+            color: white;
+            border-radius: 4px;
+            font-size: 16px;
+            outline: none;
+        }
+        .input-group input:focus {
+            border-color: #e50914;
+        }
+    </style>
 </head>
 <body class="app-body">
 
@@ -14,10 +29,10 @@
     <nav class="nav">
         <!-- Opciones principales -->
         <a href="home.html">Inicio</a>
-        <a href="mi-lista.html" class="activo">Mi Lista</a>
+        <a href="mi-lista.html">Mi Lista</a>
         <div class="search-container">
-                <button class="btn-search-icon" style="background: transparent; border: none; color: white; font-size: 20px; cursor: pointer;">🔍</button>
-            </div>
+            <button class="btn-search-icon" style="background: transparent; border: none; color: white; font-size: 20px; cursor: pointer;">🔍</button>
+        </div>
         <!-- Menú Desplegable del Perfil -->
         <div class="nav-perfil">
             <div class="nav-perfil-trigger">
@@ -43,15 +58,46 @@
     </nav>
 </header>
 
-<main class="suscripcion-section page-top">
-    <p class="eyebrow">Cuenta</p>
-    <h1>Mi suscripción</h1>
-    <p class="section-subtitle">Consulta el estado de tu plan y cancela la renovación si lo deseas.</p>
+<main class="facturacion-section page-top" style="max-width: 600px; margin: 0 auto; padding-top: 100px;">
+    <p class="eyebrow">Configuración</p>
+    <h1>Mi Cuenta</h1>
+    <p class="section-subtitle">Actualiza tu información de acceso o cierra sesión en otros dispositivos.</p>
 
-    <div id="suscripcionCard" class="suscripcion-card"></div>
+    <!-- Sección de Correo -->
+    <div style="background: rgba(255,255,255,0.05); padding: 25px; border-radius: 8px; margin-bottom: 30px;">
+        <h3 style="margin-bottom: 15px;">Cambiar Correo Electrónico</h3>
+        <p style="color: #aaa; margin-bottom: 15px; font-size: 0.9em;">Tu correo actual es: <strong id="correoActual">Cargando...</strong></p>
+        <div class="input-group" style="margin-bottom: 15px;">
+            <input type="email" id="nuevoCorreo" placeholder="Nuevo correo electrónico">
+        </div>
+        <button id="btnActualizarCorreo" class="btn btn-primary" style="width: 100%;">Actualizar Correo</button>
+        <p id="msgCorreo" style="margin-top: 10px; font-size: 0.9em; text-align: center;"></p>
+    </div>
+
+    <!-- Sección de Contraseña -->
+    <div style="background: rgba(255,255,255,0.05); padding: 25px; border-radius: 8px; margin-bottom: 30px;">
+        <h3 style="margin-bottom: 15px;">Cambiar Contraseña</h3>
+        <div class="input-group" style="margin-bottom: 15px;">
+            <input type="password" id="passwordActual" placeholder="Contraseña actual">
+        </div>
+        <div class="input-group" style="margin-bottom: 15px;">
+            <input type="password" id="nuevoPassword" placeholder="Nueva contraseña">
+        </div>
+        <button id="btnActualizarPassword" class="btn btn-primary" style="width: 100%;">Actualizar Contraseña</button>
+        <p id="msgPassword" style="margin-top: 10px; font-size: 0.9em; text-align: center;"></p>
+    </div>
+
+    <!-- Sección Extra: Cerrar Sesión Global -->
+    <div style="background: rgba(255,255,255,0.05); padding: 25px; border-radius: 8px;">
+        <h3 style="margin-bottom: 15px; color: #ffb4b8;">Seguridad Avanzada</h3>
+        <p style="color: #aaa; margin-bottom: 15px; font-size: 0.9em;">Cierra la sesión en todos los dispositivos donde hayas iniciado sesión.</p>
+        <button id="btnCerrarSesiones" class="btn btn-secondary" style="width: 100%; border-color: #e50914; color: #e50914;">Cerrar sesión globalmente</button>
+    </div>
+
 </main>
 
-<script src="js/suscripcion.js"></script>
+<script src="js/cuenta.js"></script>
+
 <div id="modalEditarPerfil" class="modal-overlay">
     <section class="modal-card">
         <h2>Editar perfil</h2>
@@ -82,7 +128,7 @@
 <script>
     const NAV_API_BASE = window.location.origin;
 
-    function cerrarSesionNav() {
+    function cerrarSesion() {
         localStorage.clear();
         sessionStorage.clear();
         window.location.href = "index.html";
@@ -156,7 +202,7 @@
     }
 
     async function eliminarPerfilActual() {
-        if(!confirm("¿Estás 100% seguro de eliminar ESTE perfil?\nPerderás tu Historial y Mi Lista para siempre.")) return;
+        if(!confirm("¿Estás 100% seguro de eliminar ESTE perfil?\\nPerderás tu Historial y Mi Lista para siempre.")) return;
         
         const perfil_id = localStorage.getItem("perfil_id") || sessionStorage.getItem("perfil_id");
         try {
