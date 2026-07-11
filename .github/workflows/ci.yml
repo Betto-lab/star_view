@@ -1,0 +1,32 @@
+name: Node.js CI
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        node-version: [18.x, 20.x]
+
+    steps:
+    - name: Descargar el código fuente
+      uses: actions/checkout@v4
+    
+    - name: Configurar Node.js ${{ matrix.node-version }}
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ matrix.node-version }}
+        cache: 'npm'
+        
+    - name: Instalar dependencias
+      run: npm ci
+
+    # Aquí puedes agregar pruebas en el futuro:
+    # - name: Ejecutar pruebas
+    #   run: npm test

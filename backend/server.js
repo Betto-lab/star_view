@@ -89,6 +89,25 @@ cron.schedule('1 0 * * *', () => {
         }
     });
 });
+
+/* =========================================
+   TAREA PROGRAMADA: RESPALDO DE BASE DE DATOS (CRON JOB)
+   Se ejecuta todos los días a las 03:00 AM
+========================================= */
+cron.schedule('0 3 * * *', () => {
+    console.log("🕒 [CRON] Iniciando respaldo automático de la base de datos...");
+    const { exec } = require("child_process");
+    exec("npm run backup", (error, stdout, stderr) => {
+        if (error) {
+            console.error(`❌ [CRON] Error al ejecutar el backup: ${error.message}`);
+            return;
+        }
+        if (stderr) {
+            console.warn(`⚠️ [CRON] Mensaje del backup: ${stderr}`);
+        }
+        console.log(`✅ [CRON] Respaldo completado:\n${stdout.trim()}`);
+    });
+});
 function dominioAceptaCorreos(correo) {
     return new Promise((resolve) => {
         const dominio = correo.split("@")[1];
