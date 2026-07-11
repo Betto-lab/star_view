@@ -1,3 +1,4 @@
+require("./instrument.js");
 const express = require("express");
 const cors = require("cors");
 const axios = require("axios");
@@ -3621,6 +3622,11 @@ app.put("/api/admin/contenido/:id", verificarAdmin, (req, res) => {
         }
     );
 });
+
+// The error handler must be registered before any other error middleware and after all controllers
+const Sentry = require("@sentry/node");
+Sentry.setupExpressErrorHandler(app);
+
 /* =========================================
    MANEJADOR DE ERRORES 404 (SEGURO PARA VERCEL)
 ========================================= */
