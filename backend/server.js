@@ -1,4 +1,5 @@
 require("./instrument.js");
+// Archivo principal del servidor StarView
 const express = require("express");
 const cors = require("cors");
 const axios = require("axios");
