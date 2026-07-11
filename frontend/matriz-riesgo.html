@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Matriz de Riesgos | StarView</title>
+    <link rel="stylesheet" href="css/style.css">
+
+    <style>
+        .risk-page {
+            padding: 120px 34px 60px;
+        }
+
+        .risk-table-container {
+            width: 100%;
+            overflow-x: auto;
+            background: rgba(255,255,255,0.04);
+            border: 1px solid rgba(255,255,255,0.12);
+            border-radius: 18px;
+            padding: 20px;
+            margin-top: 30px;
+        }
+
+        .risk-table {
+            width: 100%;
+            border-collapse: collapse;
+            min-width: 1400px;
+            color: #f8fafc;
+            font-size: 13px;
+        }
+
+        .risk-table th,
+        .risk-table td {
+            border: 1px solid rgba(255,255,255,0.16);
+            padding: 10px;
+            text-align: center;
+            vertical-align: middle;
+        }
+
+        .risk-table th {
+            background: rgba(229, 9, 20, 0.85);
+            color: #fff;
+            font-weight: bold;
+        }
+
+        .risk-table td {
+            background: rgba(15, 23, 42, 0.85);
+        }
+
+        .risk-table .left {
+            text-align: left;
+        }
+
+        .risk-note {
+            margin-top: 20px;
+            color: #cbd5e1;
+            line-height: 1.7;
+        }
+
+        .risk-badge {
+            display: inline-block;
+            padding: 5px 10px;
+            border-radius: 999px;
+            background: rgba(59,130,246,0.18);
+            color: #93c5fd;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body class="app-body">
+
+<header class="topbar app-topbar">
+    <a href="home.html" class="brand" style="text-decoration: none;">STAR<span>VIEW</span></a>
+
+    <nav class="nav">
+        <a href="home.html">Inicio</a>
+        <a href="mi-lista.html">Mi Lista</a>
+        <a href="cuenta.html">Cuenta</a>
+        <button onclick="cerrarSesion()">🚪 Cerrar sesión</button>
+    </nav>
+</header>
+
+<main class="risk-page">
+    <p class="eyebrow">Seguridad</p>
+
+    <h1>Matriz de Riesgos de Seguridad</h1>
+
+    <p class="section-subtitle">
+        Esta matriz identifica amenazas, vulnerabilidades, activos afectados, impactos y controles de mitigación aplicados al sistema StarView.
+    </p>
+
+    <p class="risk-note">
+        Escala utilizada: <span class="risk-badge">Alto = 3</span>
+        <span class="risk-badge">Medio = 2</span>
+        <span class="risk-badge">Bajo = 1</span>
+    </p>
+
+    <div class="risk-table-container">
+        <table class="risk-table">
+            <thead>
+                <tr>
+                    <th>N°</th>
+                    <th>Descripción de la amenaza</th>
+                    <th>Activos relacionados</th>
+                    <th>Vulnerabilidad</th>
+                    <th>Descripción del riesgo</th>
+                    <th>Impacto</th>
+                    <th>Integridad</th>
+                    <th>Disponibilidad</th>
+                    <th>Confidencialidad</th>
+                    <th>Financiero</th>
+                    <th>Operativo</th>
+                    <th>Imagen</th>
+                    <th>Resultado</th>
+                    <th>Respuesta</th>
+                    <th>Control propuesto</th>
+                </tr>
+            </thead>
+
+                    <tbody>
+            <tr>
+                <td>1</td>
+                <td class="left">Ataque de denegación de servicio</td>
+                <td class="left">Servidor backend, frontend y base de datos</td>
+                <td class="left">Falta de límite de solicitudes o protección contra tráfico excesivo</td>
+                <td class="left">Caída temporal del sistema y usuarios sin acceso a StarView</td>
+                <td class="left">Pérdida de disponibilidad del servicio</td>
+                <td></td>
+                <td>X</td>
+                <td></td>
+                <td>2</td>
+                <td>3</td>
+                <td>1</td>
+                <td>2.2</td>
+                <td>Mitigar</td>
+                <td class="left">Implementar rate limiting, monitoreo y limpieza de sesiones activas</td>
+            </tr>
+
+            <tr>
+                <td>2</td>
+                <td class="left">Accesos no autorizados</td>
+                <td class="left">Cuentas de usuario, perfiles y sesiones</td>
+                <td class="left">Contraseñas débiles, mala gestión de sesión o token expuesto</td>
+                <td class="left">Ingreso no autorizado a cuentas de usuarios</td>
+                <td class="left">Robo o modificación de información de usuario</td>
+                <td>X</td>
+                <td></td>
+                <td>X</td>
+                <td>2</td>
+                <td>2</td>
+                <td>3</td>
+                <td>2.1</td>
+                <td>Mitigar</td>
+                <td class="left">Usar bcrypt, JWT, cierre de sesión seguro y validaciones de acceso</td>
+            </tr>
+
+            <tr>
+                <td>3</td>
+                <td class="left">Manipulación de pagos o suscripciones</td>
+                <td class="left">Módulo de pagos, Mercado Pago y tabla de suscripciones</td>
+                <td class="left">Activación de suscripción sin confirmación real del pago</td>
+                <td class="left">Un usuario podría obtener acceso sin pagar correctamente</td>
+                <td class="left">Pérdida económica y afectación del modelo de negocio</td>
+                <td>X</td>
+                <td></td>
+                <td></td>
+                <td>3</td>
+                <td>2</td>
+                <td>2</td>
+                <td>2.6</td>
+                <td>Mitigar</td>
+                <td class="left">Implementar webhook de Mercado Pago y validar pagos desde el backend</td>
+            </tr>
+
+            <tr>
+                <td>4</td>
+                <td class="left">Exposición de datos sensibles</td>
+                <td class="left">Base de datos, usuarios y variables de entorno</td>
+                <td class="left">Mala configuración de variables o publicación accidental de credenciales</td>
+                <td class="left">Filtración de correos, contraseñas cifradas o claves privadas</td>
+                <td class="left">Pérdida de confianza y posible acceso indebido</td>
+                <td></td>
+                <td></td>
+                <td>X</td>
+                <td>3</td>
+                <td>2</td>
+                <td>3</td>
+                <td>2.7</td>
+                <td>Mitigar</td>
+                <td class="left">Usar variables de entorno, no subir .env y restringir accesos a Railway/GitHub</td>
+            </tr>
+
+            <tr>
+                <td>5</td>
+                <td class="left">Acceso infantil a contenido no apto</td>
+                <td class="left">Perfiles infantiles y catálogo de contenido</td>
+                <td class="left">Filtro infantil incompleto en frontend o backend</td>
+                <td class="left">Un perfil infantil podría ver contenido no permitido</td>
+                <td class="left">Afectación de la experiencia y confianza del usuario</td>
+                <td>X</td>
+                <td></td>
+                <td></td>
+                <td>1</td>
+                <td>2</td>
+                <td>3</td>
+                <td>1.5</td>
+                <td>Mitigar</td>
+                <td class="left">Validar contenido infantil desde backend y no solo desde frontend</td>
+            </tr>
+
+            <tr>
+                <td>6</td>
+                <td class="left">Modificación no autorizada del catálogo</td>
+                <td class="left">Panel administrador y tabla contenido</td>
+                <td class="left">Falta de control de rol administrador</td>
+                <td class="left">Usuarios no autorizados podrían agregar, editar o eliminar películas</td>
+                <td class="left">Alteración del catálogo del sistema</td>
+                <td>X</td>
+                <td></td>
+                <td></td>
+                <td>2</td>
+                <td>3</td>
+                <td>2</td>
+                <td>2.3</td>
+                <td>Mitigar</td>
+                <td class="left">Verificar rol administrador antes de permitir acciones críticas</td>
+            </tr>
+
+            <tr>
+                <td>7</td>
+                <td class="left">Pérdida de información</td>
+                <td class="left">Base de datos de usuarios, pagos, perfiles e historial</td>
+                <td class="left">Falta de respaldos periódicos</td>
+                <td class="left">Pérdida de registros importantes del sistema</td>
+                <td class="left">Interrupción del servicio y pérdida de trazabilidad</td>
+                <td>X</td>
+                <td>X</td>
+                <td></td>
+                <td>3</td>
+                <td>3</td>
+                <td>2</td>
+                <td>2.9</td>
+                <td>Mitigar</td>
+                <td class="left">Programar respaldos de base de datos y exportaciones periódicas</td>
+            </tr>
+
+            <tr>
+                <td>8</td>
+                <td class="left">Inyección o manipulación de datos</td>
+                <td class="left">Formularios de login, registro, cuenta y perfiles</td>
+                <td class="left">Entradas no validadas correctamente</td>
+                <td class="left">Inserción o modificación indebida de información</td>
+                <td class="left">Alteración de datos o errores del sistema</td>
+                <td>X</td>
+                <td></td>
+                <td>X</td>
+                <td>2</td>
+                <td>2</td>
+                <td>2</td>
+                <td>2.0</td>
+                <td>Mitigar</td>
+                <td class="left">Validar campos, usar consultas parametrizadas y controlar errores</td>
+            </tr>
+        </tbody>
+        </table>
+    </div>
+
+</main>
+
+<script src="js/sesion.js"></script>
+</body>
+</html>

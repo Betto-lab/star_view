@@ -1,6 +1,8 @@
 const express = require("express");
 const cors = require("cors");
 const axios = require("axios");
+const rateLimit = require("express-rate-limit");
+const helmet = require("helmet");
 const bcrypt = require("bcrypt");
 const path = require("path");
 const dns = require("dns");
@@ -11,7 +13,7 @@ require("dotenv").config();
 
 const conexion = require("./db");
 
-const { MercadoPagoConfig, Preference } = require("mercadopago");
+const { MercadoPagoConfig, Preference, Payment } = require("mercadopago");
 
 const clienteMP = process.env.MP_ACCESS_TOKEN
     ? new MercadoPagoConfig({ accessToken: process.env.MP_ACCESS_TOKEN })
@@ -20,6 +22,45 @@ const clienteMP = process.env.MP_ACCESS_TOKEN
 const TMDB_API_KEY = process.env.TMDB_API_KEY || "14848f0a935d7e54d7c8ced042603214";
 
 const app = express();
+
+/* =========================================
+   PROTECCIÓN CONTRA ATAQUES Y PETICIONES MASIVAS
+========================================= */
+
+app.use(helmet({
+    contentSecurityPolicy: false
+}));
+
+const limitadorGeneral = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 300,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: {
+        ok: false,
+        mensaje: "Demasiadas solicitudes. Intenta nuevamente más tarde."
+    }
+});
+
+const limitadorLogin = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 10,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: {
+        ok: false,
+        mensaje: "Demasiados intentos de inicio de sesión. Espera unos minutos antes de volver a intentar."
+    }
+});
+
+app.use(limitadorGeneral);
+app.use("/login", limitadorLogin);
+app.use("/registro", limitadorLogin);
+app.use("/registro/verificar", limitadorLogin);
+app.use("/recuperar-cuenta", limitadorLogin);
+app.use("/recuperar-cuenta/iniciar", limitadorLogin);
+app.use("/recuperar-cuenta/confirmar", limitadorLogin);
+app.use("/perfiles/verificar", limitadorLogin);
 
 const registrosPendientes = new Map();
 const recuperacionesPerfil = new Map();
@@ -73,11 +114,33 @@ function validarSoloLetras(texto) {
 }
 
 function validarPasswordSegura(password) {
+    
     const tieneLongitud = password.length >= 8;
     const tieneNumero = /\d/.test(password);
     const tieneSimbolo = /[!@#$%^&*(),.?":{}|<>_\-+=/\\[\];'`~]/.test(password);
 
     return tieneLongitud && tieneNumero && tieneSimbolo;
+}
+
+function validarIdNumerico(valor) {
+    const numero = Number(valor);
+    return Number.isInteger(numero) && numero > 0;
+}
+
+function contieneCodigoPeligroso(texto) {
+    if (!texto) return false;
+
+    const expresion = /<script|<\/script|javascript:|onerror=|onload=|onclick=/i;
+    return expresion.test(String(texto));
+}
+
+function textoSeguro(texto, maximo = 255) {
+    if (!texto) return "";
+
+    return String(texto)
+        .trim()
+        .replace(/\s+/g, " ")
+        .slice(0, maximo);
 }
 
 function generarCodigoVerificacion() {
@@ -113,15 +176,22 @@ async function enviarCorreoVerificacion(correo, nombre, codigo, tipo = "registro
 }
 
 app.use(cors());
-app.use(express.json());
+app.use(express.json({
+    limit: "1mb"
+}));
 app.use(cookieParser());
 app.use(express.static(path.join(__dirname, "../frontend")));
 
 /* =========================================
    MIDDLEWARES DE SEGURIDAD (JWT)
 ========================================= */
-const JWT_SECRET = process.env.JWT_SECRET || "starview_upao_secreto_2026";
+const JWT_SECRET = process.env.JWT_SECRET || "starview_secret_local_solo_desarrollo";
 
+const ADMIN_EMAIL = process.env.ADMIN_EMAIL || "soporte.starview@gmail.com";
+
+if (!process.env.JWT_SECRET && process.env.NODE_ENV === "production") {
+    console.warn("ADVERTENCIA: JWT_SECRET no está configurado en producción.");
+}
 // Guardia 1: Verifica que sea un usuario registrado
 const verificarUsuario = (req, res, next) => {
     const token = req.cookies.token;
@@ -141,10 +211,14 @@ const verificarUsuario = (req, res, next) => {
 // Guardia 2: Verifica que sea el Administrador
 const verificarAdmin = (req, res, next) => {
     verificarUsuario(req, res, () => {
-        if (req.usuario.correo !== "soporte.starview@gmail.com") {
-            return res.status(403).json({ ok: false, mensaje: "Bloqueado: Nivel de administrador requerido." });
+        if (req.usuario.correo !== ADMIN_EMAIL) {
+            return res.status(403).json({
+                ok: false,
+                mensaje: "Bloqueado: Nivel de administrador requerido."
+            });
         }
-        next(); // ¡Pasa, jefe!
+
+        next();
     });
 };
 app.get("/", (req, res) => {
@@ -445,8 +519,14 @@ app.post("/registro/verificar", (req, res) => {
 ========================================= */
 
 // 1. Obtener correo actual
-app.get("/api/cuenta/:usuario_id", (req, res) => {
+app.get("/api/cuenta/:usuario_id", verificarUsuario, (req, res) => {
     const { usuario_id } = req.params;
+        if (req.usuario.id !== Number(usuario_id) && req.usuario.correo !== ADMIN_EMAIL) {
+        return res.status(403).json({
+            ok: false,
+            mensaje: "No tienes permiso para consultar esta cuenta."
+        });
+    }
     conexion.query("SELECT correo FROM usuarios WHERE id = ?", [usuario_id], (err, resultados) => {
         if (err || resultados.length === 0) return res.json({ ok: false });
         res.json({ ok: true, correo: resultados[0].correo });
@@ -456,8 +536,14 @@ app.get("/api/cuenta/:usuario_id", (req, res) => {
 const cambiosCorreoPeticiones = new Map();
 
 // 2. Solicitar Cambio de Correo
-app.post("/api/cuenta/correo/solicitar", (req, res) => {
+app.post("/api/cuenta/correo/solicitar", verificarUsuario, (req, res) => {
     const { usuario_id, nuevo_correo, nombre } = req.body;
+        if (req.usuario.id !== Number(usuario_id) && req.usuario.correo !== ADMIN_EMAIL) {
+        return res.status(403).json({
+            ok: false,
+            mensaje: "No tienes permiso para solicitar cambio de correo de esta cuenta."
+        });
+    }
     if (!usuario_id || !nuevo_correo || !nombre) return res.json({ ok: false, mensaje: "Datos incompletos" });
 
     // Validar si el correo ya existe
@@ -479,8 +565,14 @@ app.post("/api/cuenta/correo/solicitar", (req, res) => {
 });
 
 // 2.1 Confirmar Cambio de Correo
-app.put("/api/cuenta/correo/confirmar", (req, res) => {
+app.put("/api/cuenta/correo/confirmar", verificarUsuario, (req, res) => {
     const { usuario_id, nuevo_correo, codigo } = req.body;
+        if (req.usuario.id !== Number(usuario_id) && req.usuario.correo !== ADMIN_EMAIL) {
+        return res.status(403).json({
+            ok: false,
+            mensaje: "No tienes permiso para modificar el correo de esta cuenta."
+        });
+    }
     if (!usuario_id || !nuevo_correo || !codigo) return res.json({ ok: false, mensaje: "Faltan datos" });
 
     const peticion = cambiosCorreoPeticiones.get(nuevo_correo);
@@ -496,8 +588,14 @@ app.put("/api/cuenta/correo/confirmar", (req, res) => {
 });
 
 // 3. Actualizar contraseña
-app.put("/api/cuenta/password", (req, res) => {
+app.put("/api/cuenta/password", verificarUsuario, (req, res) => {
     const { usuario_id, password_actual, password_nueva } = req.body;
+        if (req.usuario.id !== Number(usuario_id) && req.usuario.correo !== ADMIN_EMAIL) {
+        return res.status(403).json({
+            ok: false,
+            mensaje: "No tienes permiso para cambiar la contraseña de esta cuenta."
+        });
+    }
     if (!usuario_id || !password_actual || !password_nueva) return res.json({ ok: false, mensaje: "Faltan datos" });
 
     conexion.query("SELECT password FROM usuarios WHERE id = ?", [usuario_id], async (err, resultados) => {
@@ -524,8 +622,14 @@ app.put("/api/cuenta/password", (req, res) => {
 });
 
 // 4. Cerrar sesiones globalmente
-app.post("/api/cuenta/cerrar-sesiones", (req, res) => {
+app.post("/api/cuenta/cerrar-sesiones", verificarUsuario, (req, res) => {
     const { usuario_id } = req.body;
+        if (req.usuario.id !== Number(usuario_id) && req.usuario.correo !== ADMIN_EMAIL) {
+        return res.status(403).json({
+            ok: false,
+            mensaje: "No tienes permiso para cerrar las sesiones de esta cuenta."
+        });
+    }
     if (!usuario_id) return res.json({ ok: false });
 
     // Incrementamos la versión de sesión para expulsar a los demás
@@ -588,11 +692,12 @@ app.post("/login", (req, res) => {
             }
 
             // --- NUEVO: GENERACIÓN DE JWT Y COOKIE HTTP-ONLY ---
-            const tokenPayload = {
-                id: usuario.id,
-                nombre: usuario.nombre,
-                correo: usuario.correo
-            };
+                const tokenPayload = {
+                    id: usuario.id,
+                    nombre: usuario.nombre,
+                    correo: usuario.correo,
+                    sesion_version: usuario.sesion_version || 1
+                };
 
             // Creamos el token cifrado que dura 24 horas
             const token = jwt.sign(tokenPayload, JWT_SECRET, { expiresIn: '24h' });
@@ -671,7 +776,7 @@ app.get("/contenido/perfil/:perfil_id", (req, res) => {
             const parametros = [];
 
             if (esInfantil) {
-                sql += " WHERE infantil = 1";
+                sql += " AND infantil = 1";
             }
 
             sql += " ORDER BY id DESC";
@@ -784,7 +889,19 @@ app.get("/perfiles/:usuario_id", (req, res) => {
 
 app.post("/perfiles", (req, res) => {
     const { usuario_id, nombre, avatar, infantil, password_perfil } = req.body;
+        if (!validarIdNumerico(usuario_id)) {
+        return res.json({
+            ok: false,
+            mensaje: "Usuario no válido"
+        });
+    }
 
+    if (contieneCodigoPeligroso(nombre) || contieneCodigoPeligroso(avatar)) {
+        return res.json({
+            ok: false,
+            mensaje: "Los datos del perfil contienen caracteres no permitidos"
+        });
+    }
     if (!usuario_id || !nombre || !avatar || !password_perfil) {
         return res.json({
             ok: false,
@@ -798,6 +915,9 @@ app.post("/perfiles", (req, res) => {
             mensaje: "La contraseña del perfil debe tener mínimo 4 caracteres"
         });
     }
+
+    const nombreSeguro = textoSeguro(nombre, 50);
+    const avatarSeguro = textoSeguro(avatar, 80);
 
     conexion.query(
         "SELECT COUNT(*) AS total FROM perfiles WHERE usuario_id = ?",
@@ -824,7 +944,7 @@ app.post("/perfiles", (req, res) => {
             conexion.query(
                 `INSERT INTO perfiles(usuario_id, nombre, avatar, infantil, password_perfil)
                  VALUES (?, ?, ?, ?, ?)`,
-                [usuario_id, nombre, avatar, infantil ? 1 : 0, passwordHash],
+                [usuario_id, nombreSeguro, avatarSeguro, infantil ? 1 : 0, passwordHash],
                 (errorInsert) => {
                     if (errorInsert) {
                         console.log(errorInsert);
@@ -1333,7 +1453,7 @@ app.put("/historial/progreso", (req, res) => {
 /* =========================================
    BUSCAR PELÍCULA EN TMDb (PARA AUTOCOMPLETAR EN ADMIN)
 ========================================= */
-app.get("/tmdb/buscar-preview", async (req, res) => {
+app.get("/tmdb/buscar-preview", verificarAdmin, async (req, res) => {
     const { titulo } = req.query;
 
     if (!titulo) {
@@ -1410,7 +1530,7 @@ app.get("/tmdb/populares", async (req, res) => {
     }
 });
 
-app.get("/tmdb/sincronizar", async (req, res) => {
+app.get("/tmdb/sincronizar", verificarAdmin, async (req, res) => {
     try {
         let totalInsertados = 0;
         let totalActualizados = 0;
@@ -1538,7 +1658,7 @@ app.get("/tmdb/sincronizar", async (req, res) => {
     }
 });
 
-app.post("/tmdb/importar", async (req, res) => {
+app.post("/tmdb/importar", verificarAdmin, async (req, res) => {
     const { tmdb_id } = req.body;
 
     if (!tmdb_id) {
@@ -1653,6 +1773,70 @@ app.post("/tmdb/importar", async (req, res) => {
     );
 });
 
+function activarSuscripcionPagada({ usuario_id, plan_id, metodo_pago, monto, codigo_comprobante }, callback) {
+    if (!usuario_id || !plan_id || !metodo_pago || !monto) {
+        return callback(new Error("Datos incompletos para activar suscripción"));
+    }
+
+    conexion.query(
+        "SELECT id FROM pagos WHERE codigo_comprobante = ? LIMIT 1",
+        [codigo_comprobante],
+        (errExiste, pagosExistentes) => {
+            if (errExiste) {
+                return callback(errExiste);
+            }
+
+            if (pagosExistentes.length > 0) {
+                return callback(null, {
+                    ok: true,
+                    mensaje: "Pago ya registrado previamente",
+                    pago_id: pagosExistentes[0].id
+                });
+            }
+
+            conexion.query(
+                `INSERT INTO pagos
+                 (usuario_id, plan_id, metodo_pago, monto, estado, codigo_comprobante)
+                 VALUES (?, ?, ?, ?, 'pagado', ?)`,
+                [usuario_id, plan_id, metodo_pago, monto, codigo_comprobante],
+                (errPago, resultadoPago) => {
+                    if (errPago) {
+                        return callback(errPago);
+                    }
+
+                    conexion.query(
+                        "UPDATE suscripciones SET estado = 'cancelada' WHERE usuario_id = ? AND estado = 'activa'",
+                        [usuario_id],
+                        (errCancelar) => {
+                            if (errCancelar) {
+                                return callback(errCancelar);
+                            }
+
+                            conexion.query(
+                                `INSERT INTO suscripciones
+                                 (usuario_id, plan_id, estado, fecha_inicio, fecha_fin)
+                                 VALUES (?, ?, 'activa', NOW(), DATE_ADD(NOW(), INTERVAL 1 MONTH))`,
+                                [usuario_id, plan_id],
+                                (errSuscripcion) => {
+                                    if (errSuscripcion) {
+                                        return callback(errSuscripcion);
+                                    }
+
+                                    callback(null, {
+                                        ok: true,
+                                        mensaje: "Pago confirmado y suscripción activada",
+                                        pago_id: resultadoPago.insertId
+                                    });
+                                }
+                            );
+                        }
+                    );
+                }
+            );
+        }
+    );
+}
+
 /* =========================
    PLANES, PAGO, FACTURACIÓN
 ========================= */
@@ -1674,8 +1858,15 @@ app.get("/planes", (req, res) => {
 /* =========================================
    REGISTRO DE PAGO CON PRORRATEO ESTRICTO
 ========================================= */
-app.post("/pagos", (req, res) => {
+app.post("/pagos", verificarUsuario, (req, res) => {
     const { usuario_id, plan_id, metodo_pago, monto } = req.body;
+
+    if (req.usuario.id !== Number(usuario_id) && req.usuario.correo !== ADMIN_EMAIL) {
+        return res.status(403).json({
+            ok: false,
+            mensaje: "No tienes permiso para registrar pagos de esta cuenta."
+        });
+    }
 
     if (!usuario_id || !plan_id || !metodo_pago || !monto) {
         return res.json({
@@ -1686,84 +1877,30 @@ app.post("/pagos", (req, res) => {
 
     const codigo_comprobante = "BOLETA-SV-" + Math.floor(Math.random() * 100000000);
 
-    conexion.query(
-        "SELECT nombre, correo FROM usuarios WHERE id = ?",
-        [usuario_id],
-        (errUsuario, usuarios) => {
-            if (errUsuario || usuarios.length === 0) {
-                return res.json({ ok: false, mensaje: "Usuario no encontrado" });
+    activarSuscripcionPagada(
+        {
+            usuario_id,
+            plan_id,
+            metodo_pago,
+            monto,
+            codigo_comprobante
+        },
+        (error, resultado) => {
+            if (error) {
+                console.error("Error al registrar pago:", error);
+
+                return res.json({
+                    ok: false,
+                    mensaje: "No se pudo registrar el pago"
+                });
             }
 
-            const usuario = usuarios[0];
-
-            conexion.query(
-                "SELECT nombre FROM planes WHERE id = ?",
-                [plan_id],
-                (errPlan, planes) => {
-                    if (errPlan || planes.length === 0) {
-                        return res.json({ ok: false, mensaje: "Plan no encontrado" });
-                    }
-
-                    const planNombre = planes[0].nombre;
-
-                    // [ARQUITECTURA SEGURO] Buscamos el vencimiento del plan actual antes de dar de baja
-                    conexion.query(
-                        "SELECT fecha_fin FROM suscripciones WHERE usuario_id = ? AND estado = 'activa' ORDER BY id DESC LIMIT 1",
-                        [usuario_id],
-                        (errSub, subs) => {
-                            // Cancelamos la suscripción vieja
-                            conexion.query(
-                                "UPDATE suscripciones SET estado = 'cancelada' WHERE usuario_id = ? AND estado = 'activa'",
-                                [usuario_id],
-                                () => {
-                                    // Siempre se da 1 mes desde cero (ya se descontó el saldo en el checkout)
-                                    let queryInsert = `
-                                        INSERT INTO suscripciones (usuario_id, plan_id, estado, fecha_inicio, fecha_fin)
-                                        VALUES (?, ?, 'activa', NOW(), DATE_ADD(NOW(), INTERVAL 1 MONTH))
-                                    `;
-                                    let paramsInsert = [usuario_id, plan_id];
-
-                                    conexion.query(queryInsert, paramsInsert, async (errSuscripcion) => {
-                                        if (errSuscripcion) {
-                                            console.log(errSuscripcion);
-                                            return res.json({
-                                                ok: false,
-                                                mensaje: "Pago registrado, pero no se pudo activar la suscripción"
-                                            });
-                                        }
-
-                                        const fechaHoy = new Date().toLocaleDateString("es-PE");
-
-                                        if (process.env.GOOGLE_SCRIPT_URL) {
-                                            try {
-                                                await axios.post(process.env.GOOGLE_SCRIPT_URL, {
-                                                    tipo: "boleta",
-                                                    correo: usuario.correo,
-                                                    nombre: usuario.nombre,
-                                                    monto: Number(monto).toFixed(2),
-                                                    planNombre: planNombre,
-                                                    codigo_comprobante: codigo_comprobante,
-                                                    metodo_pago: metodo_pago,
-                                                    fecha: fechaHoy
-                                                });
-                                            } catch (errorCorreo) {
-                                                console.log("Error contactando a Google Script:", errorCorreo.message);
-                                            }
-                                        }
-
-                                        res.json({
-                                            ok: true,
-                                            mensaje: "Suscripción activada y boleta enviada.",
-                                            pago_id: resultadoPago.insertId,
-                                            codigo_comprobante
-                                        });
-                                    });
-                                }
-                            );
-                        }
-                    );
-                }
-            );
+            res.json({
+                ok: true,
+                mensaje: "Suscripción activada correctamente.",
+                pago_id: resultado.pago_id,
+                codigo_comprobante
+            });
         }
     );
 });
@@ -1847,13 +1984,31 @@ app.get("/api/pagos/calcular/:usuario_id/:nuevo_plan_id", (req, res) => {
 app.post("/mercadopago/crear-preferencia", (req, res) => {
     const { usuario_id, plan_id, monto_calculado } = req.body;
 
-    if (!usuario_id || !plan_id) return res.json({ ok: false, mensaje: "Faltan datos" });
+    if (!usuario_id || !plan_id) {
+        return res.json({
+            ok: false,
+            mensaje: "Faltan datos"
+        });
+    }
+
+    if (!clienteMP) {
+        return res.json({
+            ok: false,
+            mensaje: "Mercado Pago no está configurado. Falta MP_ACCESS_TOKEN."
+        });
+    }
 
     conexion.query("SELECT * FROM planes WHERE id = ?", [plan_id], async (err, resultados) => {
-        if (err || resultados.length === 0) return res.json({ ok: false, mensaje: "Plan no encontrado" });
+        if (err || resultados.length === 0) {
+            return res.json({
+                ok: false,
+                mensaje: "Plan no encontrado"
+            });
+        }
 
         const plan = resultados[0];
         const precioCobrar = monto_calculado ? Number(monto_calculado) : Number(plan.precio);
+        const baseUrl = process.env.BASE_URL || "http://localhost:3000";
 
         try {
             const body = {
@@ -1867,23 +2022,94 @@ app.post("/mercadopago/crear-preferencia", (req, res) => {
                     }
                 ],
                 back_urls: {
-                    success: `${process.env.BASE_URL}/pago-exitoso.html?usuario_id=${usuario_id}&plan_id=${plan.id}&monto=${precioCobrar}`,
-                    failure: `${process.env.BASE_URL}/pago-fallido.html`,
-                    pending: `${process.env.BASE_URL}/pago-pendiente.html`
+                    success: `${baseUrl}/pago-exitoso.html?usuario_id=${usuario_id}&plan_id=${plan.id}&monto=${precioCobrar}`,
+                    failure: `${baseUrl}/pago-fallido.html`,
+                    pending: `${baseUrl}/pago-pendiente.html`
                 },
-                auto_return: "approved"
+                auto_return: "approved",
+                external_reference: `${usuario_id}-${plan.id}-${Date.now()}`,
+                metadata: {
+                    usuario_id: String(usuario_id),
+                    plan_id: String(plan.id),
+                    monto: String(precioCobrar)
+                }
             };
 
             const preference = new Preference(clienteMP);
             const respuesta = await preference.create({ body });
 
-            res.json({ ok: true, init_point: respuesta.init_point, sandbox_init_point: respuesta.sandbox_init_point });
+            res.json({
+                ok: true,
+                init_point: respuesta.init_point,
+                sandbox_init_point: respuesta.sandbox_init_point
+            });
+
         } catch (error) {
             console.error("Error al crear preferencia:", error);
-            res.json({ ok: false, mensaje: "Error al generar enlace de pago" });
+
+            res.json({
+                ok: false,
+                mensaje: "Error al generar enlace de pago"
+            });
         }
     });
 });
+
+app.post("/mercadopago/webhook", async (req, res) => {
+    try {
+        const tipo = req.body.type || req.query.type;
+        const paymentId = req.body.data?.id || req.query["data.id"];
+
+        if (tipo !== "payment" || !paymentId) {
+            return res.sendStatus(200);
+        }
+
+        if (!clienteMP) {
+            console.log("Mercado Pago no está configurado para webhook.");
+            return res.sendStatus(200);
+        }
+
+        const payment = new Payment(clienteMP);
+        const pagoMP = await payment.get({ id: paymentId });
+
+        if (!pagoMP || pagoMP.status !== "approved") {
+            console.log("Pago recibido, pero no aprobado:", paymentId);
+            return res.sendStatus(200);
+        }
+
+        const metadata = pagoMP.metadata || {};
+
+        const usuario_id = metadata.usuario_id;
+        const plan_id = metadata.plan_id;
+        const monto = metadata.monto || pagoMP.transaction_amount;
+        const metodo_pago = pagoMP.payment_method_id || "Mercado Pago";
+        const codigo_comprobante = `MP-${pagoMP.id}`;
+
+        activarSuscripcionPagada(
+            {
+                usuario_id,
+                plan_id,
+                metodo_pago,
+                monto,
+                codigo_comprobante
+            },
+            (error, resultado) => {
+                if (error) {
+                    console.error("Error al activar suscripción desde webhook:", error);
+                    return res.sendStatus(500);
+                }
+
+                console.log("Webhook procesado correctamente:", resultado);
+                return res.sendStatus(200);
+            }
+        );
+
+    } catch (error) {
+        console.error("Error en webhook de Mercado Pago:", error);
+        res.sendStatus(500);
+    }
+});
+
 /* =========================================
    FACTURACIÓN (RUTA PROTEGIDA CON JWT)
 ========================================= */
@@ -1891,7 +2117,7 @@ app.get("/facturacion/:usuario_id", verificarUsuario, (req, res) => {
     const usuario_id = req.params.usuario_id;
 
     // 🚨 EL BLINDAJE: Verificamos si el que pide la información es el dueño o el admin
-    if (req.usuario.id !== parseInt(usuario_id) && req.usuario.correo !== "soporte.starview@gmail.com") {
+    if (req.usuario.id !== parseInt(usuario_id) && req.usuario.correo !== ADMIN_EMAIL) {
         return res.status(403).json({ ok: false, mensaje: "Intento de robo de identidad bloqueado." });
     }
 
@@ -2013,8 +2239,14 @@ app.get("/recibo/:id", (req, res) => {
     );
 });
 
-app.get("/suscripcion/:usuario_id", (req, res) => {
+app.get("/suscripcion/:usuario_id", verificarUsuario, (req, res) => {
     const usuario_id = req.params.usuario_id;
+        if (req.usuario.id !== Number(usuario_id) && req.usuario.correo !== ADMIN_EMAIL) {
+        return res.status(403).json({
+            ok: false,
+            mensaje: "No tienes permiso para consultar esta suscripción."
+        });
+    }
 
     conexion.query(
         `SELECT
@@ -2048,9 +2280,16 @@ app.get("/suscripcion/:usuario_id", (req, res) => {
     );
 });
 
-app.put("/suscripcion/cancelar/:id", (req, res) => {
+app.put("/suscripcion/cancelar/:id", verificarUsuario, (req, res) => {
     const id = req.params.id;
     const { motivo_cancelacion } = req.body;
+
+    if (!validarIdNumerico(id)) {
+        return res.json({
+            ok: false,
+            mensaje: "Suscripción no válida"
+        });
+    }
 
     if (!motivo_cancelacion) {
         return res.json({
@@ -2059,28 +2298,48 @@ app.put("/suscripcion/cancelar/:id", (req, res) => {
         });
     }
 
-    // SOLUCIÓN: Solo actualizamos el estado y el motivo. Ya NO tocamos la fecha_fin.
     conexion.query(
-        `UPDATE suscripciones
-         SET estado = 'cancelada',
-             renovacion_automatica = 0,
-             motivo_cancelacion = ?,
-             fecha_cancelacion = NOW()
-         WHERE id = ?`,
-        [motivo_cancelacion, id],
-        (error) => {
-            if (error) {
-                console.log(error);
+        "SELECT usuario_id FROM suscripciones WHERE id = ?",
+        [id],
+        (errorSub, suscripciones) => {
+            if (errorSub || suscripciones.length === 0) {
                 return res.json({
                     ok: false,
-                    mensaje: "No se pudo cancelar la suscripción"
+                    mensaje: "Suscripción no encontrada"
                 });
             }
 
-            res.json({
-                ok: true,
-                mensaje: "Suscripción cancelada. Mantendrás acceso hasta el fin de tus 30 días."
-            });
+            if (req.usuario.id !== Number(suscripciones[0].usuario_id) && req.usuario.correo !== ADMIN_EMAIL) {
+                return res.status(403).json({
+                    ok: false,
+                    mensaje: "No tienes permiso para cancelar esta suscripción."
+                });
+            }
+
+            conexion.query(
+                `UPDATE suscripciones
+                 SET estado = 'cancelada',
+                     renovacion_automatica = 0,
+                     motivo_cancelacion = ?,
+                     fecha_cancelacion = NOW()
+                 WHERE id = ?`,
+                [motivo_cancelacion, id],
+                (error) => {
+                    if (error) {
+                        console.log(error);
+
+                        return res.json({
+                            ok: false,
+                            mensaje: "No se pudo cancelar la suscripción"
+                        });
+                    }
+
+                    res.json({
+                        ok: true,
+                        mensaje: "Suscripción cancelada. Mantendrás acceso hasta el fin de tus 30 días."
+                    });
+                }
+            );
         }
     );
 });
@@ -2106,6 +2365,7 @@ app.get("/api/recomendaciones/:genero/:id_actual", (req, res) => {
             SELECT *
             FROM contenido
             WHERE id != ?
+            AND COALESCE(activo, 1) = 1
         `;
 
         const parametros = [id_actual];
@@ -2128,11 +2388,12 @@ app.get("/api/recomendaciones/:genero/:id_actual", (req, res) => {
             if (esInfantil && resultados.length === 0) {
                 conexion.query(
                     `SELECT *
-                     FROM contenido
-                     WHERE id != ?
-                     AND infantil = 1
-                     ORDER BY id DESC
-                     LIMIT 6`,
+                    FROM contenido
+                    WHERE id != ?
+                    AND infantil = 1
+                    AND COALESCE(activo, 1) = 1
+                    ORDER BY id DESC
+                    LIMIT 6`,
                     [id_actual],
                     (errorFallback, resultadosFallback) => {
                         if (errorFallback) {
@@ -2175,49 +2436,113 @@ app.get("/api/recomendaciones/:genero/:id_actual", (req, res) => {
    RUTAS PARA CASOS DE PRUEBA HU03 Y HU15
 ========================================= */
 
-app.put("/perfiles/:id", (req, res) => {
+app.put("/perfiles/:id", verificarUsuario, (req, res) => {
     const { id } = req.params;
     const { nombre, avatar, infantil } = req.body;
 
+    if (!validarIdNumerico(id)) {
+        return res.json({
+            ok: false,
+            mensaje: "Perfil no válido"
+        });
+    }
+
+    if (!nombre || contieneCodigoPeligroso(nombre) || contieneCodigoPeligroso(avatar)) {
+        return res.json({
+            ok: false,
+            mensaje: "Los datos del perfil contienen caracteres no permitidos"
+        });
+    }
+
+    const nombreSeguro = textoSeguro(nombre, 50);
+    const avatarSeguro = textoSeguro(avatar, 80);
+
     conexion.query(
-        "UPDATE perfiles SET nombre = ?, avatar = ?, infantil = ? WHERE id = ?",
-        [nombre, avatar, infantil ? 1 : 0, id],
-        (error) => {
-            if (error) {
+        "SELECT usuario_id FROM perfiles WHERE id = ?",
+        [id],
+        (errorPerfil, perfiles) => {
+            if (errorPerfil || perfiles.length === 0) {
                 return res.json({
                     ok: false,
-                    mensaje: "Error al actualizar perfil"
+                    mensaje: "Perfil no encontrado"
                 });
             }
 
-            res.json({
-                ok: true,
-                mensaje: "Perfil actualizado correctamente"
-            });
+            if (req.usuario.id !== Number(perfiles[0].usuario_id) && req.usuario.correo !== ADMIN_EMAIL) {
+                return res.status(403).json({
+                    ok: false,
+                    mensaje: "No tienes permiso para modificar este perfil."
+                });
+            }
+
+            conexion.query(
+                "UPDATE perfiles SET nombre = ?, avatar = ?, infantil = ? WHERE id = ?",
+                [nombreSeguro, avatarSeguro, infantil ? 1 : 0, id],
+                (error) => {
+                    if (error) {
+                        return res.json({
+                            ok: false,
+                            mensaje: "Error al actualizar perfil"
+                        });
+                    }
+
+                    res.json({
+                        ok: true,
+                        mensaje: "Perfil actualizado correctamente"
+                    });
+                }
+            );
         }
     );
 });
 
-app.delete("/perfiles/:id", (req, res) => {
+app.delete("/perfiles/:id", verificarUsuario, (req, res) => {
     const { id } = req.params;
 
-    conexion.query("DELETE FROM historial WHERE perfil_id = ?", [id], () => {
-        conexion.query("DELETE FROM mi_lista WHERE perfil_id = ?", [id], () => {
-            conexion.query("DELETE FROM perfiles WHERE id = ?", [id], (error) => {
-                if (error) {
-                    return res.json({
-                        ok: false,
-                        mensaje: "Error al eliminar perfil"
-                    });
-                }
+    if (!validarIdNumerico(id)) {
+        return res.json({
+            ok: false,
+            mensaje: "Perfil no válido"
+        });
+    }
 
-                res.json({
-                    ok: true,
-                    mensaje: "Perfil eliminado correctamente"
+    conexion.query(
+        "SELECT usuario_id FROM perfiles WHERE id = ?",
+        [id],
+        (errorPerfil, perfiles) => {
+            if (errorPerfil || perfiles.length === 0) {
+                return res.json({
+                    ok: false,
+                    mensaje: "Perfil no encontrado"
+                });
+            }
+
+            if (req.usuario.id !== Number(perfiles[0].usuario_id) && req.usuario.correo !== ADMIN_EMAIL) {
+                return res.status(403).json({
+                    ok: false,
+                    mensaje: "No tienes permiso para eliminar este perfil."
+                });
+            }
+
+            conexion.query("DELETE FROM historial WHERE perfil_id = ?", [id], () => {
+                conexion.query("DELETE FROM mi_lista WHERE perfil_id = ?", [id], () => {
+                    conexion.query("DELETE FROM perfiles WHERE id = ?", [id], (error) => {
+                        if (error) {
+                            return res.json({
+                                ok: false,
+                                mensaje: "Error al eliminar perfil"
+                            });
+                        }
+
+                        res.json({
+                            ok: true,
+                            mensaje: "Perfil eliminado correctamente"
+                        });
+                    });
                 });
             });
-        });
-    });
+        }
+    );
 });
 
 app.get("/recomendaciones/historial/:perfil_id", (req, res) => {
@@ -2813,8 +3138,14 @@ app.get("/api/pagos/recibo/:id", (req, res) => {
 /* =========================================
    CANCELAR SUSCRIPCIÓN
 ========================================= */
-app.post("/api/suscripciones/cancelar", (req, res) => {
+app.post("/api/suscripciones/cancelar", verificarUsuario, (req, res) => {
     const { usuario_id, motivo } = req.body;
+        if (req.usuario.id !== Number(usuario_id) && req.usuario.correo !== ADMIN_EMAIL) {
+        return res.status(403).json({
+            ok: false,
+            mensaje: "No tienes permiso para cancelar esta suscripción."
+        });
+    }
 
     conexion.query(
         "SELECT fecha_fin FROM suscripciones WHERE usuario_id = ? AND estado = 'activa' ORDER BY id DESC LIMIT 1",
@@ -2883,13 +3214,16 @@ app.delete("/api/admin/contenido/:id", verificarAdmin, (req, res) => {
 /* =========================================
    PANEL DE ADMINISTRACIÓN (CRM + CMS COMPLETO)
 ========================================= */
-app.get("/panel-admin/:usuario_id", (req, res) => {
+app.get("/panel-admin/:usuario_id", verificarAdmin, (req, res) => {
     const { usuario_id } = req.params;
+        if (req.usuario.id !== Number(usuario_id) && req.usuario.correo !== ADMIN_EMAIL) {
+        return res.status(403).send("<h1>No tienes permiso para acceder al panel de administración</h1>");
+    }
 
     conexion.query("SELECT correo FROM usuarios WHERE id = ?", [usuario_id], (errAdmin, usuarios) => {
         if (errAdmin || usuarios.length === 0) return res.send("<h1>Usuario no encontrado</h1>");
 
-        const CORREO_ADMINISTRADOR = "soporte.starview@gmail.com";
+        const CORREO_ADMINISTRADOR = ADMIN_EMAIL;
 
         if (usuarios[0].correo !== CORREO_ADMINISTRADOR) {
             return res.redirect("/seleccionar-perfil.html");
@@ -3188,6 +3522,24 @@ app.get("/panel-admin/:usuario_id", (req, res) => {
 ========================================= */
 app.post("/api/admin/contenido", verificarAdmin, (req, res) => {
     const { titulo, genero, descripcion, infantil, video_url, imagen } = req.body;
+        if (
+        contieneCodigoPeligroso(titulo) ||
+        contieneCodigoPeligroso(genero) ||
+        contieneCodigoPeligroso(descripcion) ||
+        contieneCodigoPeligroso(video_url) ||
+        contieneCodigoPeligroso(imagen)
+    ) {
+        return res.json({
+            ok: false,
+            mensaje: "El contenido ingresado contiene caracteres no permitidos."
+        });
+    }
+
+    const tituloSeguro = textoSeguro(titulo, 120);
+    const generoSeguro = textoSeguro(genero || "Sin género", 120);
+    const descripcionSegura = textoSeguro(descripcion || "", 1000);
+    const videoSeguro = textoSeguro(video_url, 500);
+    const imagenSegura = textoSeguro(imagen || "", 500);
 
     if (!titulo || !video_url) {
         return res.json({ ok: false, mensaje: "El título y la URL del video son obligatorios." });
@@ -3196,7 +3548,7 @@ app.post("/api/admin/contenido", verificarAdmin, (req, res) => {
     conexion.query(
         `INSERT INTO contenido (titulo, tipo, genero, descripcion, infantil, video_url, imagen, activo, origen) 
          VALUES (?, 'pelicula', ?, ?, ?, ?, ?, 1, 'propio')`,
-        [titulo, genero || "Sin género", descripcion || "", infantil ? 1 : 0, video_url, imagen || ""],
+        [tituloSeguro, generoSeguro, descripcionSegura, infantil ? 1 : 0, videoSeguro, imagenSegura],
         (err, resultado) => {
             if (err) {
                 console.error("Error al crear película:", err);
@@ -3212,10 +3564,35 @@ app.post("/api/admin/contenido", verificarAdmin, (req, res) => {
 app.put("/api/admin/contenido/:id", verificarAdmin, (req, res) => {
     const id = req.params.id;
     const { titulo, genero, descripcion, infantil, video_url, imagen, activo } = req.body;
+        if (!validarIdNumerico(id)) {
+        return res.json({
+            ok: false,
+            mensaje: "Contenido no válido"
+        });
+    }
+
+    if (
+        contieneCodigoPeligroso(titulo) ||
+        contieneCodigoPeligroso(genero) ||
+        contieneCodigoPeligroso(descripcion) ||
+        contieneCodigoPeligroso(video_url) ||
+        contieneCodigoPeligroso(imagen)
+    ) {
+        return res.json({
+            ok: false,
+            mensaje: "El contenido ingresado contiene caracteres no permitidos."
+        });
+    }
+
+    const tituloSeguro = textoSeguro(titulo, 120);
+    const generoSeguro = textoSeguro(genero || "Sin género", 120);
+    const descripcionSegura = textoSeguro(descripcion || "", 1000);
+    const videoSeguro = textoSeguro(video_url || "", 500);
+    const imagenSegura = textoSeguro(imagen || "", 500);
 
     conexion.query(
         `UPDATE contenido SET titulo = ?, genero = ?, descripcion = ?, infantil = ?, video_url = ?, imagen = ?, activo = ? WHERE id = ?`,
-        [titulo, genero, descripcion, infantil ? 1 : 0, video_url || "", imagen || "", activo ? 1 : 0, id],
+        [tituloSeguro, generoSeguro, descripcionSegura, infantil ? 1 : 0, videoSeguro, imagenSegura, activo ? 1 : 0, id],
         (err) => {
             if (err) {
                 console.error(err);
