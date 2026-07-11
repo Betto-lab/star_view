@@ -11,5 +11,12 @@
       "src": "/(.*)",
       "dest": "backend/server.js"
     }
+  ],
+  "crons": [
+    {
+      "path": "/api/cron/suscripciones",
+      "schedule": "1 0 * * *"
+    }
   ]
+
 }

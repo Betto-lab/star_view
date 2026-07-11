@@ -66,49 +66,8 @@ app.use("/perfiles/verificar", limitadorLogin);
 const registrosPendientes = new Map();
 const recuperacionesPerfil = new Map();
 const recuperacionesCuenta = new Map();
-const cron = require('node-cron');
+// Tareas programadas movidas a endpoints para Vercel Serverless (Vercel Cron)
 
-/* =========================================
-   TAREA PROGRAMADA: AUDITORÍA DE SUSCRIPCIONES (CRON JOB)
-   Se ejecuta todos los días a las 00:01 AM
-========================================= */
-cron.schedule('1 0 * * *', () => {
-    console.log("🕒 [CRON] Ejecutando auditoría de suscripciones vencidas...");
-
-    // Busca las suscripciones activas cuya fecha de fin ya pasó y las cancela
-    const query = `
-        UPDATE suscripciones 
-        SET estado = 'vencida' 
-        WHERE estado = 'activa' AND fecha_fin < NOW()
-    `;
-
-    conexion.query(query, (err, resultados) => {
-        if (err) {
-            console.error("❌ [CRON] Error al actualizar suscripciones:", err);
-        } else {
-            console.log(`✅ [CRON] Auditoría completada. Suscripciones vencidas hoy: ${resultados.affectedRows}`);
-        }
-    });
-});
-
-/* =========================================
-   TAREA PROGRAMADA: RESPALDO DE BASE DE DATOS (CRON JOB)
-   Se ejecuta todos los días a las 03:00 AM
-========================================= */
-cron.schedule('0 3 * * *', () => {
-    console.log("🕒 [CRON] Iniciando respaldo automático de la base de datos...");
-    const { exec } = require("child_process");
-    exec("npm run backup", (error, stdout, stderr) => {
-        if (error) {
-            console.error(`❌ [CRON] Error al ejecutar el backup: ${error.message}`);
-            return;
-        }
-        if (stderr) {
-            console.warn(`⚠️ [CRON] Mensaje del backup: ${stderr}`);
-        }
-        console.log(`✅ [CRON] Respaldo completado:\n${stdout.trim()}`);
-    });
-});
 function dominioAceptaCorreos(correo) {
     return new Promise((resolve) => {
         const dominio = correo.split("@")[1];
@@ -3621,6 +3580,32 @@ app.put("/api/admin/contenido/:id", verificarAdmin, (req, res) => {
             res.json({ ok: true, mensaje: "Película actualizada correctamente." });
         }
     );
+});
+
+/* =========================================
+   VERCEL CRON: AUDITORÍA DE SUSCRIPCIONES
+========================================= */
+app.get("/api/cron/suscripciones", (req, res) => {
+    console.log("🕒 [VERCEL CRON] Ejecutando auditoría de suscripciones vencidas...");
+    const query = `
+        UPDATE suscripciones 
+        SET estado = 'vencida' 
+        WHERE estado = 'activa' AND fecha_fin < NOW()
+    `;
+
+    conexion.query(query, (err, resultados) => {
+        if (err) {
+            console.error("❌ [VERCEL CRON] Error al actualizar suscripciones:", err);
+            return res.status(500).json({ ok: false, error: "Error en cron" });
+        }
+        console.log(`✅ [VERCEL CRON] Auditoría completada. Suscripciones vencidas: ${resultados.affectedRows}`);
+        res.json({ ok: true, afectadas: resultados.affectedRows });
+    });
+});
+
+// Ruta de prueba para Sentry (provoca un error intencional)
+app.get("/debug-sentry", function mainHandler(req, res) {
+  throw new Error("My first Sentry error!");
 });
 
 // The error handler must be registered before any other error middleware and after all controllers
