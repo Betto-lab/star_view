@@ -27,6 +27,5 @@ jobs:
     - name: Instalar dependencias
       run: npm ci
 
-    # Aquí puedes agregar pruebas en el futuro:
-    # - name: Ejecutar pruebas
-    #   run: npm test
+    - name: Ejecutar Pruebas Automatizadas
+      run: npm test
