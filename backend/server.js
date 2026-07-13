@@ -155,7 +155,9 @@ async function enviarCorreoVerificacion(correo, nombre, codigo, tipo = "registro
     }
 }
 
-app.use(cors());
+app.use(cors({
+    origin: process.env.FRONTEND_URL || '*'
+}));
 app.use(express.json({
     limit: "1mb"
 }));
@@ -2842,7 +2844,7 @@ app.get("/api/pagos/recibo/:id", (req, res) => {
     conexion.query(queryBoleta, [pagoId], (err, resultados) => {
         if (err) {
             console.error("Error SQL en Recibo:", err);
-            return res.status(500).send(`Error de Base de Datos: ${err.message}`);
+            return res.status(500).send("Ocurrió un error interno al generar el recibo.");
         }
 
         if (resultados.length === 0) {
@@ -3604,10 +3606,7 @@ app.get("/api/cron/suscripciones", (req, res) => {
     });
 });
 
-// Ruta de prueba para Sentry (provoca un error intencional)
-app.get("/debug-sentry", function mainHandler(req, res) {
-  throw new Error("My first Sentry error!");
-});
+
 
 // The error handler must be registered before any other error middleware and after all controllers
 const Sentry = require("@sentry/node");

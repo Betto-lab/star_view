@@ -14,9 +14,4 @@ describe('Pruebas del Servidor StarView', () => {
         // Puede que devuelva HTML si sirve la carpeta frontend, por lo tanto esperamos status 200
         expect(res.statusCode).toEqual(200);
     });
-
-    it('La ruta de test Sentry (/debug-sentry) debe devolver error 500', async () => {
-        const res = await request(app).get('/debug-sentry');
-        expect(res.statusCode).toEqual(500);
-    });
 });
