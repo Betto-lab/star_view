@@ -220,7 +220,7 @@ async function cargarCatalogo() {
         window.catalogoGlobal = lista;
         catalogo = lista;
 
-        const contenedor = document.getElementById("catalogo");
+        const contenedor = document.getElementById("generosContenedor");
         if (!contenedor) return;
         contenedor.innerHTML = "";
 
@@ -229,7 +229,41 @@ async function cargarCatalogo() {
             return;
         }
 
-        contenedor.innerHTML = lista.map(item => cardContenido(item)).join(""); 
+        // Agrupar por género
+        const contenidoPorGenero = {};
+        
+        // Agregar "Novedades" como primera fila con las últimas 15 películas agregadas
+        contenidoPorGenero["Novedades"] = lista.slice(0, 15);
+
+        lista.forEach(item => {
+            const genero = item.genero || "Otros";
+            if (!contenidoPorGenero[genero]) {
+                contenidoPorGenero[genero] = [];
+            }
+            contenidoPorGenero[genero].push(item);
+        });
+
+        // Generar HTML para cada género
+        let htmlGeneros = "";
+        for (const [genero, peliculas] of Object.entries(contenidoPorGenero)) {
+            if (peliculas.length === 0) continue;
+
+            htmlGeneros += `
+                <section class="section-block">
+                    <div class="section-heading">
+                        <div>
+                            <p class="eyebrow">Catálogo</p>
+                            <h2>${escapeHTML(genero)}</h2>
+                        </div>
+                    </div>
+                    <div class="catalogo">
+                        ${peliculas.map(p => cardContenido(p)).join("")}
+                    </div>
+                </section>
+            `;
+        }
+
+        contenedor.innerHTML = htmlGeneros; 
     } catch (error) {
         console.log("Error al cargar el catálogo:", error);
     }
