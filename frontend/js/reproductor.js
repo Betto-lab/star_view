@@ -285,6 +285,13 @@ async function cargarContenido() {
             return;
         }
 
+        // BLINDAJE: Si es un perfil infantil y el contenido es para adultos (ej: por link directo)
+        if (esPerfilInfantilActivo() && Number(contenidoActual.infantil) !== 1) {
+            alert("Este contenido no está disponible para perfiles infantiles.");
+            window.location.replace("home.html");
+            return;
+        }
+
         document.getElementById("tituloContenido").innerText = contenidoActual.titulo || "Sin título";
         document.getElementById("tipoContenido").innerText = contenidoActual.tipo || "Contenido";
         document.getElementById("generoContenido").innerText = contenidoActual.genero || "Sin género";
@@ -396,6 +403,13 @@ async function cargarContenido() {
                         clearInterval(intervaloHeartbeat);
                         if (intervaloGuardado) clearInterval(intervaloGuardado);
                         window.location.replace("home.html");
+                    }
+                    // Caso de Suscripción cancelada o expirada
+                    else if (datos.suscripcionInactiva) {
+                        clearInterval(intervaloHeartbeat);
+                        if (intervaloGuardado) clearInterval(intervaloGuardado);
+                        alert(datos.mensaje || "Tu suscripción ha expirado. Por favor, renueva tu plan.");
+                        window.location.replace("planes.html");
                     }
                 }
             } catch (error) {

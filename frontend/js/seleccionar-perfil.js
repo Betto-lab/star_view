@@ -138,6 +138,7 @@ async function cargarPerfiles() {
         const perfiles = await respuesta.json();
 
         contenedor.innerHTML = "";
+        window.cantidadPerfilesActual = perfiles ? perfiles.length : 0;
 
         // 1. DIBUJAR LOS PERFILES EXISTENTES
         if (perfiles && perfiles.length > 0) {
@@ -551,7 +552,8 @@ function iniciarHeartbeatBasico() {
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                     usuario_id: usuario_id,
-                    sesion_version: localStorage.getItem("sesion_version") || sessionStorage.getItem("sesion_version") || 1
+                    sesion_version: localStorage.getItem("sesion_version") || sessionStorage.getItem("sesion_version") || 1,
+                    cantidad_perfiles: window.cantidadPerfilesActual || 0
                 })
             });
 
@@ -561,6 +563,11 @@ function iniciarHeartbeatBasico() {
                 localStorage.clear();
                 sessionStorage.clear();
                 window.location.replace("login.html");
+            }
+            
+            if (datos.perfilesCambio) {
+                // Si alguien creó o borró un perfil en otra sesión, recargamos la lista
+                await cargarPerfiles();
             }
         } catch (error) {
             console.error("Error validando sesión:", error);

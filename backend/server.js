@@ -1231,23 +1231,40 @@ app.post("/mi-lista", (req, res) => {
 app.get("/mi-lista/:perfil_id", (req, res) => {
     const perfil_id = req.params.perfil_id;
 
-    conexion.query(
-        `SELECT contenido.*
-         FROM mi_lista
-         INNER JOIN contenido ON mi_lista.contenido_id = contenido.id
-         WHERE mi_lista.perfil_id = ? 
-         AND COALESCE(contenido.activo, 1) = 1
-         ORDER BY mi_lista.id DESC`,
-        [perfil_id],
-        (error, resultados) => {
+    // 1. Verificamos si el perfil es infantil
+    conexion.query(`SELECT infantil FROM perfiles WHERE id = ?`, [perfil_id], (errPerfil, perfiles) => {
+        if (errPerfil || perfiles.length === 0) {
+            return res.json([]);
+        }
+
+        const esInfantil = Number(perfiles[0].infantil) === 1;
+
+        // 2. Construimos la consulta
+        let query = `
+            SELECT contenido.*
+            FROM mi_lista
+            INNER JOIN contenido ON mi_lista.contenido_id = contenido.id
+            WHERE mi_lista.perfil_id = ? 
+            AND COALESCE(contenido.activo, 1) = 1
+        `;
+
+        // 3. Filtro condicional: Si el perfil es infantil, ocultamos el contenido adulto que se haya agregado previamente
+        if (esInfantil) {
+            query += ` AND contenido.infantil = 1 `;
+        }
+
+        query += ` ORDER BY mi_lista.id DESC`;
+
+        // 4. Ejecutamos
+        conexion.query(query, [perfil_id], (error, resultados) => {
             if (error) {
                 console.log(error);
                 return res.json([]);
             }
 
             res.json(resultados);
-        }
-    );
+        });
+    });
 });
 
 app.delete("/mi-lista/:perfil_id/:contenido_id", (req, res) => {
@@ -2734,25 +2751,43 @@ app.post("/api/stream/ping", (req, res) => {
                 });
             }
 
-        // 2. Auditoría de Contenido: ¿La película fue eliminada o puesta en oculto (activo = 0)?
-        conexion.query("SELECT COALESCE(activo, 1) AS activo FROM contenido WHERE id = ?", [contenido_id], (errCont, resCont) => {
-            if (errCont || resCont.length === 0 || resCont[0].activo === 0) {
-                return res.json({
-                    ok: false,
-                    contenidoInactivo: true,
-                    mensaje: "Este contenido ya no se encuentra disponible."
-                });
-            }
-
-            // 3. Concurrencia habitual: si todo está en regla, refrescamos actividad
-            conexion.query(
-                "UPDATE reproducciones_activas SET ultima_actividad = NOW() WHERE usuario_id = ? AND dispositivo_token = ?",
-                [usuario_id, dispositivo_token],
-                () => {
-                    res.json({ ok: true });
+            // Auditoría de Suscripción: ¿Sigue activa?
+            conexion.query("SELECT estado, fecha_fin FROM suscripciones WHERE usuario_id = ? ORDER BY id DESC LIMIT 1", [usuario_id], (errSub, resSub) => {
+                if (errSub || resSub.length === 0) {
+                    return res.json({ ok: false, suscripcionInactiva: true, mensaje: "Sin suscripción." });
                 }
-            );
-        });
+                const sub = resSub[0];
+                if (sub.estado !== 'activa') {
+                    if (sub.estado === 'cancelada' && sub.fecha_fin) {
+                        const fechaFin = new Date(sub.fecha_fin);
+                        if (new Date() > fechaFin) {
+                            return res.json({ ok: false, suscripcionInactiva: true, mensaje: "Tu suscripción ha expirado." });
+                        }
+                    } else {
+                        return res.json({ ok: false, suscripcionInactiva: true, mensaje: "Tu suscripción está inactiva." });
+                    }
+                }
+
+                // 2. Auditoría de Contenido: ¿La película fue eliminada o puesta en oculto (activo = 0)?
+                conexion.query("SELECT COALESCE(activo, 1) AS activo FROM contenido WHERE id = ?", [contenido_id], (errCont, resCont) => {
+                    if (errCont || resCont.length === 0 || resCont[0].activo === 0) {
+                        return res.json({
+                            ok: false,
+                            contenidoInactivo: true,
+                            mensaje: "Este contenido ya no se encuentra disponible."
+                        });
+                    }
+
+                    // 3. Concurrencia habitual: si todo está en regla, refrescamos actividad
+                    conexion.query(
+                        "UPDATE reproducciones_activas SET ultima_actividad = NOW() WHERE usuario_id = ? AND dispositivo_token = ?",
+                        [usuario_id, dispositivo_token],
+                        () => {
+                            res.json({ ok: true });
+                        }
+                    );
+                });
+            }); // <- Added for errSub
         }); // <- Added for errPerf
     }); // <- Added for errUsr
 });
@@ -2761,14 +2796,26 @@ app.post("/api/stream/ping", (req, res) => {
    HEARTBEAT BÁSICO: SELECCIÓN DE PERFIL
 ========================================= */
 app.post("/api/usuario/ping", (req, res) => {
-    const { usuario_id, sesion_version } = req.body;
+    const { usuario_id, sesion_version, cantidad_perfiles } = req.body;
     if (!usuario_id) return res.json({ ok: false });
 
     conexion.query("SELECT sesion_version FROM usuarios WHERE id = ?", [usuario_id], (errUsr, resUsr) => {
         if (errUsr || resUsr.length === 0 || Number(resUsr[0].sesion_version) > Number(sesion_version)) {
             return res.json({ ok: false, sesionCerrada: true });
         }
-        res.json({ ok: true });
+        
+        if (cantidad_perfiles !== undefined) {
+            conexion.query("SELECT COUNT(*) AS total FROM perfiles WHERE usuario_id = ?", [usuario_id], (errPerf, resPerf) => {
+                if (errPerf) return res.json({ ok: true, perfilesCambio: false });
+                const totalActual = resPerf[0].total;
+                if (totalActual !== cantidad_perfiles) {
+                    return res.json({ ok: true, perfilesCambio: true });
+                }
+                res.json({ ok: true, perfilesCambio: false });
+            });
+        } else {
+            res.json({ ok: true });
+        }
     });
 });
 
@@ -2791,17 +2838,34 @@ app.post("/api/home/ping", (req, res) => {
                 return res.json({ ok: false, perfilEliminado: true });
             }
         
-        conexion.query("SELECT COUNT(*) AS total FROM contenido WHERE COALESCE(activo, 1) = 1", (errCont, resCont) => {
-            if (errCont) {
-                return res.json({ ok: true, catalogoCambio: false });
-            }
-            
-            const totalActual = resCont[0].total;
-            if (catalogo_length !== undefined && totalActual !== catalogo_length) {
-                return res.json({ ok: true, catalogoCambio: true });
-            }
-            res.json({ ok: true, catalogoCambio: false });
-        });
+            conexion.query("SELECT estado, fecha_fin FROM suscripciones WHERE usuario_id = ? ORDER BY id DESC LIMIT 1", [usuario_id], (errSub, resSub) => {
+                if (errSub || resSub.length === 0) {
+                    return res.json({ ok: false, suscripcionInactiva: true, mensaje: "Sin suscripción." });
+                }
+                const sub = resSub[0];
+                if (sub.estado !== 'activa') {
+                    if (sub.estado === 'cancelada' && sub.fecha_fin) {
+                        const fechaFin = new Date(sub.fecha_fin);
+                        if (new Date() > fechaFin) {
+                            return res.json({ ok: false, suscripcionInactiva: true, mensaje: "Tu suscripción ha expirado." });
+                        }
+                    } else {
+                        return res.json({ ok: false, suscripcionInactiva: true, mensaje: "Tu suscripción está inactiva." });
+                    }
+                }
+
+                conexion.query("SELECT COUNT(*) AS total FROM contenido WHERE COALESCE(activo, 1) = 1", (errCont, resCont) => {
+                    if (errCont) {
+                        return res.json({ ok: true, catalogoCambio: false });
+                    }
+                    
+                    const totalActual = resCont[0].total;
+                    if (catalogo_length !== undefined && totalActual !== catalogo_length) {
+                        return res.json({ ok: true, catalogoCambio: true });
+                    }
+                    res.json({ ok: true, catalogoCambio: false });
+                });
+            }); // <- Added errSub closing
         }); // <- Added for errPerf
     }); // <- Added for errUsr
 });

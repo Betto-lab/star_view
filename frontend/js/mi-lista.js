@@ -224,21 +224,40 @@ document.addEventListener("DOMContentLoaded", () => {
 (function iniciarHeartbeatGlobal() {
     setInterval(async () => {
         const usuario_id = localStorage.getItem("usuario_id") || sessionStorage.getItem("usuario_id");
-        if (!usuario_id) return;
+        const perfil_id = obtenerPerfilId();
+        if (!usuario_id || !perfil_id) return;
         try {
-            const respuesta = await fetch(window.location.origin + "/api/usuario/ping", {
+            const respuesta = await fetch(window.location.origin + "/api/home/ping", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                     usuario_id: usuario_id,
-                    sesion_version: localStorage.getItem("sesion_version") || sessionStorage.getItem("sesion_version") || 1
+                    perfil_id: perfil_id,
+                    sesion_version: localStorage.getItem("sesion_version") || sessionStorage.getItem("sesion_version") || 1,
+                    catalogo_length: window.catalogoGlobal ? window.catalogoGlobal.length : 0
                 })
             });
             const datos = await respuesta.json();
+            
             if (datos.sesionCerrada) {
                 localStorage.clear();
                 sessionStorage.clear();
                 window.location.replace("login.html");
+                return;
+            }
+            if (datos.perfilEliminado) {
+                localStorage.removeItem("perfil_id");
+                sessionStorage.removeItem("perfil_id");
+                window.location.replace("seleccionar-perfil.html");
+                return;
+            }
+            if (datos.suscripcionInactiva) {
+                alert(datos.mensaje || "Tu suscripción ha expirado. Por favor, renueva tu plan.");
+                window.location.replace("planes.html");
+                return;
+            }
+            if (datos.catalogoCambio) {
+                await cargarMiLista();
             }
         } catch (error) {}
     }, 15000);

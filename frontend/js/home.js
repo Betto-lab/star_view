@@ -704,6 +704,12 @@ function iniciarHeartbeatGlobal() {
                 return;
             }
 
+            if (datos.suscripcionInactiva) {
+                alert(datos.mensaje || "Tu suscripción ha expirado. Por favor, renueva tu plan.");
+                window.location.replace("planes.html");
+                return;
+            }
+
             if (datos.catalogoCambio) {
                 // Hay cambios en el catálogo (ej: eliminaron peli) recargamos silenciosamente
                 await cargarCatalogo();
