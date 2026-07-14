@@ -1,33 +1,8 @@
-<!DOCTYPE html>
-<html lang="es">
-<head>
-    <script>
-        const originalFetch = window.fetch;
-        window.fetch = function() {
-            let [resource, config] = arguments;
-            if (!config) config = {};
-            if (config.credentials === undefined) config.credentials = 'include';
-            return originalFetch(resource, config);
-        };
-    </script>
-    <meta charset="UTF-8">
-    <title>Pago fallido - StarView</title>
-    <link rel="stylesheet" href="css/style.css">
-</head>
-<body class="auth-body">
+const fs = require('fs');
+const path = require('path');
+const files = ['pago.html', 'pago-exitoso.html', 'pago-pendiente.html', 'pago-fallido.html'];
 
-    <main class="auth-container">
-        <div class="auth-card">
-            <h1>Pago no completado</h1>
-            <p>No se pudo completar el pago. Puedes volver a intentarlo.</p>
-
-            <button onclick="window.location.href='pago.html'">
-                Intentar nuevamente
-            </button>
-        </div>
-    </main>
-
-
+const scriptToAdd = `
 <script>
     const NAV_API_BASE = window.location.origin;
     function cerrarSesionNav() {
@@ -62,14 +37,14 @@
         }
 
         try {
-            const res = await fetch(`${NAV_API_BASE}/perfiles/${usuario_id}`);
+            const res = await fetch(\`\${NAV_API_BASE}/perfiles/\${usuario_id}\`);
             const perfiles = await res.json();
             const actual = perfiles.find(p => String(p.id) === String(perfil_id));
             
             if (actual) {
                 const img = actual.avatar.includes('.') ? actual.avatar : actual.avatar + '.jpg';
                 const elImg = document.getElementById('navAvatar');
-                if(elImg) elImg.src = `img/${img}`;
+                if(elImg) elImg.src = \`img/\${img}\`;
                 const elNom = document.getElementById('navNombrePerfil');
                 if(elNom) elNom.innerText = actual.nombre;
             }
@@ -82,5 +57,16 @@
     }
     document.addEventListener('DOMContentLoaded', () => { cargarDatosTopbar(); });
 </script>
-</body>
-</html>
+`;
+
+files.forEach(f => {
+    let p = path.join('frontend', f);
+    if(fs.existsSync(p)){
+        let c = fs.readFileSync(p, 'utf8');
+        if(!c.includes('cargarDatosTopbar')) {
+            c = c.replace('</body>', scriptToAdd + '</body>');
+            fs.writeFileSync(p, c);
+            console.log('Patched', f);
+        }
+    }
+});
