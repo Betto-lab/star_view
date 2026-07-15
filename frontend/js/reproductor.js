@@ -645,7 +645,8 @@ function inicializarControlesPlayer() {
 
     video.addEventListener("timeupdate", () => {
         if (video.duration && barraProgreso) {
-            const porcentaje = (video.currentTime / video.duration) * 100;
+            let porcentaje = (video.currentTime / video.duration) * 100;
+            if (isNaN(porcentaje)) porcentaje = 0;
 
             barraProgreso.value = porcentaje;
             barraProgreso.style.background = `linear-gradient(to right, #e50914 ${porcentaje}%, rgba(255, 255, 255, 0.25) ${porcentaje}%)`;
@@ -873,6 +874,12 @@ function mostrarToastDRM(mensaje) {
 }
 
 // Bloqueo de capturas de pantalla y herramientas (PrintScreen, F12, Ctrl+S)
+document.addEventListener("contextmenu", event => {
+    // Bloquear click derecho en todo el reproductor para evitar "Descargar video"
+    event.preventDefault();
+    mostrarToastDRM("❌ Acción bloqueada por políticas de seguridad (DRM).");
+});
+
 document.addEventListener("keyup", event => {
     if (event.key === "PrintScreen") {
         const video = document.getElementById("videoPlayer");
@@ -966,9 +973,14 @@ function cambiarCalidadCloudinary(calidad, nombreBoton) {
     }
 
     videoPlayer.src = urlNueva;
-    videoPlayer.currentTime = tiempoActual;
-    
-    videoPlayer.play().catch(e => {
-        console.log("Error al auto-reproducir tras cambio de calidad:", e);
+    videoPlayer.load();
+
+    // Esperar a que los metadatos carguen antes de establecer el tiempo
+    videoPlayer.addEventListener("loadedmetadata", function restaurarTiempo() {
+        videoPlayer.currentTime = tiempoActual;
+        videoPlayer.play().catch(e => {
+            console.log("Error al auto-reproducir tras cambio de calidad:", e);
+        });
+        videoPlayer.removeEventListener("loadedmetadata", restaurarTiempo);
     });
 }
