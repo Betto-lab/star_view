@@ -917,15 +917,7 @@ window.addEventListener("focus", () => {
 /* =========================================
    MENÚ DE CALIDAD Y RESOLUCIÓN CLOUDINARY
 ========================================= */
-const btnConfiguracion = document.getElementById("btnConfiguracion");
-const menuConfiguracion = document.getElementById("menuConfiguracion");
 const itemsCalidad = document.querySelectorAll("#listaCalidades li");
-
-if (btnConfiguracion && menuConfiguracion) {
-    btnConfiguracion.addEventListener("click", () => {
-        menuConfiguracion.classList.toggle("oculto");
-    });
-}
 
 itemsCalidad.forEach(item => {
     item.addEventListener("click", () => {
@@ -933,7 +925,9 @@ itemsCalidad.forEach(item => {
         itemsCalidad.forEach(li => li.classList.remove("activo"));
         item.classList.add("activo");
         
-        menuConfiguracion.classList.add("oculto");
+        const menuConfig = document.getElementById("menuConfiguracion");
+        if (menuConfig) menuConfig.classList.add("oculto");
+        
         const calidad = item.getAttribute("data-calidad");
         cambiarCalidadCloudinary(calidad, item.innerText);
     });
