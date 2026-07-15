@@ -859,3 +859,122 @@ document.addEventListener("keydown", event => {
         guardarProgresoRapido();
     }
 });
+
+/* =========================================
+   SISTEMA DE SEGURIDAD (DRM SIMULADO)
+========================================= */
+
+function mostrarToastDRM(mensaje) {
+    const toast = document.getElementById("toastReproductor");
+    if (!toast) return;
+    toast.innerText = mensaje;
+    toast.classList.add("show");
+    setTimeout(() => toast.classList.remove("show"), 3000);
+}
+
+// Bloqueo de capturas de pantalla y herramientas (PrintScreen, F12, Ctrl+S)
+document.addEventListener("keyup", event => {
+    if (event.key === "PrintScreen") {
+        const video = document.getElementById("videoPlayer");
+        if (video) video.pause();
+        mostrarToastDRM("❌ Captura bloqueada por políticas de protección de derechos de autor (DRM).");
+        navigator.clipboard.writeText(""); // Limpiar portapapeles
+    }
+});
+
+document.addEventListener("keydown", event => {
+    // Bloquear F12, Ctrl+Shift+I, Ctrl+U, Ctrl+S
+    if (
+        event.key === "F12" || 
+        (event.ctrlKey && event.shiftKey && event.key === "I") || 
+        (event.ctrlKey && event.key === "u") || 
+        (event.ctrlKey && event.key === "s")
+    ) {
+        event.preventDefault();
+        mostrarToastDRM("❌ Acción bloqueada por políticas de seguridad (DRM).");
+    }
+});
+
+// Efecto Blur cuando el usuario cambia de ventana (Anti-OBS/Camtasia)
+window.addEventListener("blur", () => {
+    const video = document.getElementById("videoPlayer");
+    const container = document.getElementById("videoContenedor");
+    if (video && !video.paused) {
+        video.pause();
+    }
+    if (container) {
+        container.classList.add("drm-blur");
+    }
+});
+
+window.addEventListener("focus", () => {
+    const container = document.getElementById("videoContenedor");
+    if (container) {
+        container.classList.remove("drm-blur");
+    }
+});
+
+/* =========================================
+   MENÚ DE CALIDAD Y RESOLUCIÓN CLOUDINARY
+========================================= */
+const btnConfiguracion = document.getElementById("btnConfiguracion");
+const menuConfiguracion = document.getElementById("menuConfiguracion");
+const itemsCalidad = document.querySelectorAll("#listaCalidades li");
+
+if (btnConfiguracion && menuConfiguracion) {
+    btnConfiguracion.addEventListener("click", () => {
+        menuConfiguracion.classList.toggle("oculto");
+    });
+}
+
+itemsCalidad.forEach(item => {
+    item.addEventListener("click", () => {
+        // Quitar activo a todos y poner al actual
+        itemsCalidad.forEach(li => li.classList.remove("activo"));
+        item.classList.add("activo");
+        
+        menuConfiguracion.classList.add("oculto");
+        const calidad = item.getAttribute("data-calidad");
+        cambiarCalidadCloudinary(calidad, item.innerText);
+    });
+});
+
+function cambiarCalidadCloudinary(calidad, nombreBoton) {
+    const videoPlayer = document.getElementById("videoPlayer");
+    if (!videoPlayer) return;
+
+    mostrarToastDRM(`Ajustando resolución a ${nombreBoton}...`);
+    
+    const tiempoActual = videoPlayer.currentTime;
+    let urlOriginal = contenidoActual?.video_url || "videos/demo.mp4";
+    
+    // Si no es un enlace de cloudinary, no podemos alterar la calidad
+    if (!urlOriginal.includes("res.cloudinary.com")) {
+        // Si el usuario subio archivos locales o usó YouTube, simulamos una recarga nada más
+        setTimeout(() => {
+            videoPlayer.play();
+        }, 500);
+        return;
+    }
+
+    // Lógica para inyectar o modificar el parámetro de Cloudinary en la URL
+    // Formato común: https://res.cloudinary.com/demo/video/upload/v1611111/video.mp4
+    // Formato modificado: https://res.cloudinary.com/demo/video/upload/q_auto,h_720/v1611111/video.mp4
+    
+    let urlNueva = urlOriginal;
+    // Quitamos cualquier parametro de calidad previo (ej. q_auto,h_X)
+    urlNueva = urlNueva.replace(/\/q_[^/]+\//, "/");
+    
+    if (calidad !== "auto") {
+        // Inyectamos el nuevo parametro de calidad justo después de "/upload/"
+        const modificador = `/q_auto,h_${calidad}/`;
+        urlNueva = urlNueva.replace("/upload/", `/upload${modificador}`);
+    }
+
+    videoPlayer.src = urlNueva;
+    videoPlayer.currentTime = tiempoActual;
+    
+    videoPlayer.play().catch(e => {
+        console.log("Error al auto-reproducir tras cambio de calidad:", e);
+    });
+}

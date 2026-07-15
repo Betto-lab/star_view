@@ -659,6 +659,49 @@ async function cargarRecomendacionesAlternativas() {
 }
 
 // ==========================================
+// NOTIFICACIONES DE VENCIMIENTO
+// ==========================================
+async function verificarVencimientoSuscripcion() {
+    const usuario_id = localStorage.getItem("usuario_id") || sessionStorage.getItem("usuario_id");
+    if (!usuario_id) return;
+
+    try {
+        const respuesta = await fetch(`${API_BASE}/suscripcion/${usuario_id}`);
+        const datos = await respuesta.json();
+
+        if (datos.ok && datos.suscripcion && datos.suscripcion.fecha_fin) {
+            const fechaFin = new Date(datos.suscripcion.fecha_fin);
+            const hoy = new Date();
+            
+            // Calculamos la diferencia en días
+            const diferenciaTiempo = fechaFin.getTime() - hoy.getTime();
+            const diasRestantes = Math.ceil(diferenciaTiempo / (1000 * 3600 * 24));
+
+            if (diasRestantes >= 0 && diasRestantes <= 3) {
+                // Inyectamos un banner de alerta
+                const header = document.querySelector("header");
+                if (header) {
+                    const banner = document.createElement("div");
+                    banner.style.backgroundColor = "rgba(234, 179, 8, 0.9)";
+                    banner.style.color = "#000";
+                    banner.style.padding = "10px 20px";
+                    banner.style.textAlign = "center";
+                    banner.style.fontWeight = "bold";
+                    banner.style.fontSize = "14px";
+                    banner.style.zIndex = "10000";
+                    banner.style.width = "100%";
+                    banner.innerHTML = `⚠️ Tu suscripción vence en ${diasRestantes} día(s). <a href="facturacion.html" style="color: #000; text-decoration: underline;">Ir a Facturación</a>`;
+                    
+                    document.body.insertBefore(banner, header);
+                }
+            }
+        }
+    } catch (error) {
+        console.log("Error al verificar vencimiento de suscripción:", error);
+    }
+}
+
+// ==========================================
 // INICIALIZACIÓN MÁSTER
 // ==========================================
 async function inicializarHome() {
@@ -682,6 +725,7 @@ async function inicializarHome() {
     await cargarCatalogo();
     await cargarRecomendacionesUsuario();
     await cargarDatosTopbar();
+    await verificarVencimientoSuscripcion();
 
    // 1. Conectamos la lupa de tu menú superior para que abra la pantalla
     const btnSearchIcon = document.querySelector(".btn-search-icon");
