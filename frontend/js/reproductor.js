@@ -439,6 +439,7 @@ function inicializarControlesPlayer() {
     const btnRetroceder = document.getElementById("btnRetroceder");
     const btnAdelantar = document.getElementById("btnAdelantar");
     const barraVolumen = document.getElementById("barraVolumen");
+    const btnMute = document.getElementById("btnMute");
     const btnPantallaCompleta = document.getElementById("btnPantallaCompleta");
     const barraProgreso = document.getElementById("barraProgreso");
     const tooltip = document.getElementById("tiempoTooltip");
@@ -527,10 +528,35 @@ function inicializarControlesPlayer() {
     if (barraVolumen) {
         barraVolumen.addEventListener("input", event => {
             video.volume = Number(event.target.value);
+            video.muted = false;
+            if (btnMute) btnMute.innerText = "🔊";
 
             const porcentaje = event.target.value * 100;
-
             barraVolumen.style.background = `linear-gradient(to right, #fff ${porcentaje}%, rgba(255, 255, 255, 0.25) ${porcentaje}%)`;
+        });
+    }
+
+    if (btnMute) {
+        let volumenAnterior = 1;
+        btnMute.addEventListener("click", () => {
+            if (video.muted) {
+                video.muted = false;
+                video.volume = volumenAnterior;
+                btnMute.innerText = "🔊";
+                if (barraVolumen) {
+                    barraVolumen.value = volumenAnterior;
+                    const porcentaje = volumenAnterior * 100;
+                    barraVolumen.style.background = `linear-gradient(to right, #fff ${porcentaje}%, rgba(255, 255, 255, 0.25) ${porcentaje}%)`;
+                }
+            } else {
+                volumenAnterior = video.volume > 0 ? video.volume : 1;
+                video.muted = true;
+                btnMute.innerText = "🔇";
+                if (barraVolumen) {
+                    barraVolumen.value = 0;
+                    barraVolumen.style.background = `linear-gradient(to right, #fff 0%, rgba(255, 255, 255, 0.25) 0%)`;
+                }
+            }
         });
     }
 
@@ -972,15 +998,26 @@ function cambiarCalidadCloudinary(calidad, nombreBoton) {
         urlNueva = urlNueva.replace("/upload/", `/upload${modificador}`);
     }
 
+    // Evitar recargar si la URL final es idéntica a la que ya se está reproduciendo
+    if (videoPlayer.src === urlNueva || videoPlayer.currentSrc === urlNueva) {
+        // Significa que eligió la misma calidad o que no es un link modificable
+        setTimeout(() => videoPlayer.play(), 100);
+        return;
+    }
+
+    // Crear la función de restauración para el evento
+    const restaurarTiempo = function() {
+        if (!isNaN(videoPlayer.duration)) {
+            videoPlayer.currentTime = tiempoActual;
+        }
+        videoPlayer.play().catch(e => console.log("Error al auto-reproducir tras cambio de calidad:", e));
+        videoPlayer.removeEventListener("loadedmetadata", restaurarTiempo);
+    };
+
+    // Enganchar el evento ANTES de cambiar el src para asegurarnos de capturarlo incluso desde caché
+    videoPlayer.addEventListener("loadedmetadata", restaurarTiempo);
+    
+    // Cambiar fuente y forzar recarga
     videoPlayer.src = urlNueva;
     videoPlayer.load();
-
-    // Esperar a que los metadatos carguen antes de establecer el tiempo
-    videoPlayer.addEventListener("loadedmetadata", function restaurarTiempo() {
-        videoPlayer.currentTime = tiempoActual;
-        videoPlayer.play().catch(e => {
-            console.log("Error al auto-reproducir tras cambio de calidad:", e);
-        });
-        videoPlayer.removeEventListener("loadedmetadata", restaurarTiempo);
-    });
 }
