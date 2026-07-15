@@ -148,8 +148,12 @@ async function enviarCorreoVerificacion(correo, nombre, codigo, tipo = "registro
         });
 
         console.log(`[CORREO] Respuesta de Google HTTP: ${respuesta.status}`);
-
-    } catch (error) {
+        
+        const textoRespuesta = await respuesta.text();
+        
+        if (!respuesta.ok || textoRespuesta.toLowerCase().includes('error') || textoRespuesta.toLowerCase().includes('exception')) {
+            throw new Error(`Google Script falló: ${textoRespuesta.slice(0, 100)}`);
+        }    } catch (error) {
         console.log("[CORREO ERROR] Falló la conexión con Google Script:", error.message);
         throw new Error("Fallo en la API de correos");
     }
