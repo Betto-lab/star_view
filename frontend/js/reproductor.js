@@ -972,52 +972,23 @@ function cambiarCalidadCloudinary(calidad, nombreBoton) {
 
     mostrarToastDRM(`Ajustando resolución a ${nombreBoton}...`);
     
-    const tiempoActual = videoPlayer.currentTime;
-    let urlOriginal = contenidoActual?.video_url || "videos/demo.mp4";
+    // Simulacro de carga para evitar el límite de truncado de Cloudinary (Capa Gratuita).
+    // Evitamos alterar la URL para que el video no se corte a 3 segundos.
+    videoPlayer.pause();
     
-    // Si no es un enlace de cloudinary, no podemos alterar la calidad
-    if (!urlOriginal.includes("res.cloudinary.com")) {
-        // Si el usuario subio archivos locales o usó YouTube, simulamos una recarga nada más
-        setTimeout(() => {
-            videoPlayer.play();
-        }, 500);
-        return;
+    // Aplicamos un pequeño filtro visual de CSS para que el cambio sea perceptible
+    if (calidad === "1080" || calidad === "auto") {
+        videoPlayer.style.filter = "none";
+    } else if (calidad === "720") {
+        videoPlayer.style.filter = "blur(0.4px) contrast(0.95)";
+    } else if (calidad === "480") {
+        videoPlayer.style.filter = "blur(0.8px) contrast(0.9)";
+    } else if (calidad === "360") {
+        videoPlayer.style.filter = "blur(1.2px) contrast(0.85)";
     }
 
-    // Lógica para inyectar o modificar el parámetro de Cloudinary en la URL
-    // Formato común: https://res.cloudinary.com/demo/video/upload/v1611111/video.mp4
-    // Formato modificado: https://res.cloudinary.com/demo/video/upload/q_auto,h_720/v1611111/video.mp4
-    
-    let urlNueva = urlOriginal;
-    // Quitamos cualquier parametro de calidad previo (ej. q_auto,h_X)
-    urlNueva = urlNueva.replace(/\/q_[^/]+\//, "/");
-    
-    if (calidad !== "auto") {
-        // Inyectamos el nuevo parametro de calidad justo después de "/upload/"
-        const modificador = `/q_auto,h_${calidad}/`;
-        urlNueva = urlNueva.replace("/upload/", `/upload${modificador}`);
-    }
-
-    // Evitar recargar si la URL final es idéntica a la que ya se está reproduciendo
-    if (videoPlayer.src === urlNueva || videoPlayer.currentSrc === urlNueva) {
-        // Significa que eligió la misma calidad o que no es un link modificable
-        setTimeout(() => videoPlayer.play(), 100);
-        return;
-    }
-
-    // Crear la función de restauración para el evento
-    const restaurarTiempo = function() {
-        if (!isNaN(videoPlayer.duration)) {
-            videoPlayer.currentTime = tiempoActual;
-        }
-        videoPlayer.play().catch(e => console.log("Error al auto-reproducir tras cambio de calidad:", e));
-        videoPlayer.removeEventListener("loadedmetadata", restaurarTiempo);
-    };
-
-    // Enganchar el evento ANTES de cambiar el src para asegurarnos de capturarlo incluso desde caché
-    videoPlayer.addEventListener("loadedmetadata", restaurarTiempo);
-    
-    // Cambiar fuente y forzar recarga
-    videoPlayer.src = urlNueva;
-    videoPlayer.load();
+    // Simulamos 1.5 segundos de "buffering" de red
+    setTimeout(() => {
+        videoPlayer.play().catch(e => console.log("Error al auto-reproducir:", e));
+    }, 1500);
 }
