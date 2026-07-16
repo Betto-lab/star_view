@@ -269,7 +269,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
 // Escuchar cambios de sesión en otras pestañas
 window.addEventListener("storage", (event) => {
-    if (event.key === "usuario_id" || event.key === "rol") {
+    if (event.key === "usuario_id" || event.key === "rol" || event.key === null) {
         window.location.reload();
     }
 });

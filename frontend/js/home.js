@@ -810,7 +810,7 @@ inicializarHome();
 
 // Escuchar cambios de sesión en otras pestañas
 window.addEventListener("storage", (event) => {
-    if (event.key === "usuario_id" || event.key === "rol" || event.key === "perfil_id") {
+    if (event.key === "usuario_id" || event.key === "rol" || event.key === "perfil_id" || event.key === null) {
         window.location.reload();
     }
 });
