@@ -10,10 +10,16 @@ function cerrarSesion() {
 
 function obtenerUsuarioId() {
     const usuario_id = (localStorage.getItem("usuario_id") || sessionStorage.getItem("usuario_id"));
+    const rol = localStorage.getItem("rol") || sessionStorage.getItem("rol");
 
     if (!usuario_id || usuario_id === "undefined" || usuario_id === "null") {
         localStorage.clear(); sessionStorage.clear();
         window.location.href = "login.html";
+        return null;
+    }
+
+    if (rol === "admin") {
+        window.location.href = `${API_BASE}/panel-admin/${usuario_id}`;
         return null;
     }
 
@@ -578,4 +584,11 @@ function iniciarHeartbeatBasico() {
 // Iniciar heartbeat al cargar
 document.addEventListener("DOMContentLoaded", () => {
     iniciarHeartbeatBasico();
+});
+
+// Escuchar cambios de sesión en otras pestañas
+window.addEventListener("storage", (event) => {
+    if (event.key === "usuario_id" || event.key === "rol" || event.key === "perfil_id") {
+        window.location.reload();
+    }
 });

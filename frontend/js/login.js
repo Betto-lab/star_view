@@ -100,10 +100,20 @@ async function iniciarSesion() {
             localStorage.setItem("usuario_id", usuarioId);
             localStorage.setItem("nombre_usuario", usuario.nombre || usuario.nombre_usuario || "");
             localStorage.setItem("sesion_version", usuario.sesion_version || 1);
+            
+            sessionStorage.removeItem("usuario_id");
+            sessionStorage.removeItem("nombre_usuario");
+            sessionStorage.removeItem("sesion_version");
+            sessionStorage.removeItem("rol");
         } else {
             sessionStorage.setItem("usuario_id", usuarioId);
             sessionStorage.setItem("nombre_usuario", usuario.nombre || usuario.nombre_usuario || "");
             sessionStorage.setItem("sesion_version", usuario.sesion_version || 1);
+            
+            localStorage.removeItem("usuario_id");
+            localStorage.removeItem("nombre_usuario");
+            localStorage.removeItem("sesion_version");
+            localStorage.removeItem("rol");
         }
 
         // Limpiar perfiles previos de cualquier sesión anterior
@@ -119,14 +129,24 @@ async function iniciarSesion() {
             const CORREO_ADMIN = "soporte.starview@gmail.com"; // 🚨 Correo actualizado
 
             if (correo === CORREO_ADMIN) {
-                if (mantenerSesion) localStorage.setItem("rol", "admin");
-                else sessionStorage.setItem("rol", "admin");
+                if (mantenerSesion) {
+                    localStorage.setItem("rol", "admin");
+                    sessionStorage.removeItem("rol");
+                } else {
+                    sessionStorage.setItem("rol", "admin");
+                    localStorage.removeItem("rol");
+                }
 
                 window.location.href = `${API_BASE}/panel-admin/${usuarioId}`;
             } else {
                 // Guardamos el rol como cliente normal
-                if (mantenerSesion) localStorage.setItem("rol", "cliente");
-                else sessionStorage.setItem("rol", "cliente");
+                if (mantenerSesion) {
+                    localStorage.setItem("rol", "cliente");
+                    sessionStorage.removeItem("rol");
+                } else {
+                    sessionStorage.setItem("rol", "cliente");
+                    localStorage.removeItem("rol");
+                }
 
                 const volver = localStorage.getItem("volver_despues_login");
                 if (volver) {
@@ -244,6 +264,13 @@ document.addEventListener("DOMContentLoaded", () => {
     const usuario_id = localStorage.getItem("usuario_id") || sessionStorage.getItem("usuario_id");
     if (usuario_id) {
         window.location.href = "seleccionar-perfil.html";
+    }
+});
+
+// Escuchar cambios de sesión en otras pestañas
+window.addEventListener("storage", (event) => {
+    if (event.key === "usuario_id" || event.key === "rol") {
+        window.location.reload();
     }
 });
 ;

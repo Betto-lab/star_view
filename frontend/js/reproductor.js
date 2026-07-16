@@ -992,3 +992,10 @@ function cambiarCalidadCloudinary(calidad, nombreBoton) {
         videoPlayer.play().catch(e => console.log("Error al auto-reproducir:", e));
     }, 1500);
 }
+
+// Escuchar cambios de sesión en otras pestañas
+window.addEventListener("storage", (event) => {
+    if (event.key === "usuario_id" || event.key === "rol" || event.key === "perfil_id") {
+        window.location.reload();
+    }
+});
