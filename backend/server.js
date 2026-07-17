@@ -268,7 +268,7 @@ app.post("/recuperar-cuenta/confirmar", async (req, res) => {
 
     const peticion = recuperacionesCuenta.get(correo);
 
-    if (!peticion || peticion.codigo !== codigo || Date.now() - peticion.creado > 10 * 60 * 1000) {
+    if (!peticion || String(peticion.codigo).trim() !== String(codigo).trim() || Date.now() - peticion.creado > 10 * 60 * 1000) {
         return res.json({
             ok: false,
             mensaje: "Código inválido o expirado"
@@ -441,7 +441,7 @@ app.post("/registro/verificar", (req, res) => {
         });
     }
 
-    if (registro.codigo !== codigo) {
+    if (String(registro.codigo).trim() !== String(codigo).trim()) {
         return res.json({
             ok: false,
             mensaje: "El código de verificación es incorrecto"
@@ -562,7 +562,7 @@ app.put("/api/cuenta/correo/confirmar", verificarUsuario, (req, res) => {
     if (!usuario_id || !nuevo_correo || !codigo) return res.json({ ok: false, mensaje: "Faltan datos" });
 
     const peticion = cambiosCorreoPeticiones.get(nuevo_correo);
-    if (!peticion || peticion.codigo !== codigo || Date.now() - peticion.creado > 10 * 60 * 1000) {
+    if (!peticion || String(peticion.codigo).trim() !== String(codigo).trim() || Date.now() - peticion.creado > 10 * 60 * 1000) {
         return res.json({ ok: false, mensaje: "Código inválido o expirado" });
     }
 
@@ -1132,7 +1132,7 @@ app.post("/perfiles/recuperar-confirmar", (req, res) => {
         });
     }
 
-    if (recuperacion.codigo !== codigo) {
+    if (String(recuperacion.codigo).trim() !== String(codigo).trim()) {
         return res.json({
             ok: false,
             mensaje: "El código ingresado es incorrecto"
