@@ -527,7 +527,6 @@ function abrirEdicionPerfilActual() {
     
     const av = window.perfilActualData.avatar;
     document.getElementById("editAvatarPerfil").value = av.includes('.') ? av : av + '.jpg';
-    document.getElementById("editInfantilPerfil").checked = (Number(window.perfilActualData.infantil) === 1);
     
     document.getElementById("modalEditarPerfil").classList.add("show");
 }
@@ -536,7 +535,6 @@ async function guardarEdicionPerfilActual() {
     const perfil_id = localStorage.getItem("perfil_id") || sessionStorage.getItem("perfil_id");
     const nombre = document.getElementById("editNombrePerfil").value.trim();
     const avatar = document.getElementById("editAvatarPerfil").value;
-    const infantil = document.getElementById("editInfantilPerfil").checked;
 
     if (!nombre) return mostrarToast("El nombre no puede estar vacío", "error");
 
@@ -544,17 +542,15 @@ async function guardarEdicionPerfilActual() {
         const res = await fetch(`${API_BASE}/perfiles/${perfil_id}`, {
             method: "PUT",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ nombre, avatar, infantil })
+            body: JSON.stringify({ nombre, avatar })
         });
         const datos = await res.json();
         
         if (datos.ok) {
             if (localStorage.getItem("perfil_nombre")) {
                 localStorage.setItem("perfil_nombre", nombre);
-                localStorage.setItem("perfil_infantil", infantil ? "1" : "0");
             } else {
                 sessionStorage.setItem("perfil_nombre", nombre);
-                sessionStorage.setItem("perfil_infantil", infantil ? "1" : "0");
             }
             window.location.reload(); 
         } else {

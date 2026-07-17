@@ -2479,8 +2479,8 @@ app.put("/perfiles/:id", verificarUsuario, (req, res) => {
             }
 
             conexion.query(
-                "UPDATE perfiles SET nombre = ?, avatar = ?, infantil = ? WHERE id = ?",
-                [nombreSeguro, avatarSeguro, infantil ? 1 : 0, id],
+                "UPDATE perfiles SET nombre = ?, avatar = ? WHERE id = ?",
+                [nombreSeguro, avatarSeguro, id],
                 (error) => {
                     if (error) {
                         return res.json({
