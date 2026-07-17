@@ -814,3 +814,18 @@ window.addEventListener("storage", (event) => {
         window.location.reload();
     }
 });
+
+// Interceptor global para el botón "Cambiar de perfil"
+document.addEventListener("click", (event) => {
+    const btn = event.target.closest('a[href*="seleccionar-perfil.html"]');
+    if (btn) {
+        event.preventDefault();
+        localStorage.removeItem("perfil_id");
+        localStorage.removeItem("perfil_nombre");
+        localStorage.removeItem("perfil_infantil");
+        sessionStorage.removeItem("perfil_id");
+        sessionStorage.removeItem("perfil_nombre");
+        sessionStorage.removeItem("perfil_infantil");
+        window.location.href = "seleccionar-perfil.html";
+    }
+});
