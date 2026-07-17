@@ -583,6 +583,11 @@ function iniciarHeartbeatBasico() {
 
 // Iniciar heartbeat al cargar
 document.addEventListener("DOMContentLoaded", () => {
+    const perfil_id = localStorage.getItem("perfil_id") || sessionStorage.getItem("perfil_id");
+    if (perfil_id) {
+        window.location.href = "home.html";
+        return;
+    }
     iniciarHeartbeatBasico();
 });
 
