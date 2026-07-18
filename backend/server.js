@@ -2002,10 +2002,10 @@ app.post("/mercadopago/crear-preferencia", (req, res) => {
 
     if (pagosEnProceso.has(usuario_id)) {
         const tiempoAnterior = pagosEnProceso.get(usuario_id);
-        if (Date.now() - tiempoAnterior < 5 * 60 * 1000) {
+        if (Date.now() - tiempoAnterior < 10 * 1000) {
             return res.json({
                 ok: false,
-                mensaje: "Ya tienes un proceso de pago abierto. Completa el pago actual o espera 5 minutos para volver a intentarlo."
+                mensaje: "Ya tienes un proceso de pago abierto. Espera 10 segundos para volver a intentarlo."
             });
         }
     }
