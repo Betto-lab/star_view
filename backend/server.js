@@ -45,7 +45,7 @@ const limitadorGeneral = rateLimit({
 });
 
 const limitadorLogin = rateLimit({
-    windowMs: 15 * 60 * 1000,
+    windowMs: 5 * 1000, // 5 segundos de espera
     max: 10,
     standardHeaders: true,
     legacyHeaders: false,
@@ -67,6 +67,7 @@ app.use("/perfiles/verificar", limitadorLogin);
 const registrosPendientes = new Map();
 const recuperacionesPerfil = new Map();
 const recuperacionesCuenta = new Map();
+const pagosEnProceso = new Map();
 // Tareas programadas movidas a endpoints para Vercel Serverless (Vercel Cron)
 
 function dominioAceptaCorreos(correo) {
@@ -1864,6 +1865,11 @@ app.get("/planes", (req, res) => {
 app.post("/pagos", verificarUsuario, (req, res) => {
     const { usuario_id, plan_id, metodo_pago, monto } = req.body;
 
+    // Liberar cualquier bloqueo de Mercado Pago activo al completar
+    pagosEnProceso.delete(usuario_id);
+    pagosEnProceso.delete(String(usuario_id));
+    pagosEnProceso.delete(Number(usuario_id));
+
     if (req.usuario.id !== Number(usuario_id) && req.usuario.correo !== ADMIN_EMAIL) {
         return res.status(403).json({
             ok: false,
@@ -1993,6 +1999,18 @@ app.post("/mercadopago/crear-preferencia", (req, res) => {
             mensaje: "Faltan datos"
         });
     }
+
+    if (pagosEnProceso.has(usuario_id)) {
+        const tiempoAnterior = pagosEnProceso.get(usuario_id);
+        if (Date.now() - tiempoAnterior < 5 * 60 * 1000) {
+            return res.json({
+                ok: false,
+                mensaje: "Ya tienes un proceso de pago abierto. Completa el pago actual o espera 5 minutos para volver a intentarlo."
+            });
+        }
+    }
+
+    pagosEnProceso.set(usuario_id, Date.now());
 
     if (!clienteMP) {
         return res.json({
